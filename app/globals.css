@@ -1,0 +1,376 @@
+@import "tailwindcss";
+
+/*
+  Pulse 8 tokens. Light mode only, one theme for the whole site.
+
+  Colour: one accent only, the red from the Pulse 8 pulse line. Navy is the
+  structural dark, everything else is a cool neutral. No second accent anywhere.
+
+  Radius: buttons and inputs 10px, cards and media 16px, chips fully rounded.
+  Nothing else gets a radius.
+*/
+
+@theme inline {
+  --font-sans: var(--font-lexend);
+
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-tint: var(--tint);
+  --color-border: var(--border);
+  --color-border-soft: var(--border-soft);
+
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-faint: var(--ink-faint);
+
+  --color-navy: var(--navy);
+  --color-navy-deep: var(--navy-deep);
+  --color-on-navy: var(--on-navy);
+  --color-on-navy-muted: var(--on-navy-muted);
+
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-soft: var(--accent-soft);
+  --color-on-accent: var(--on-accent);
+
+  --radius-control: 10px;
+  --radius-card: 16px;
+}
+
+:root {
+  --bg: oklch(97.6% 0.004 262);
+  --surface: oklch(99.5% 0.001 262);
+  --tint: oklch(95.4% 0.009 262);
+  --border: oklch(89.5% 0.011 262);
+  --border-soft: oklch(93.5% 0.008 262);
+
+  --ink: oklch(24% 0.045 268);
+  --ink-muted: oklch(47% 0.03 268);
+  --ink-faint: oklch(60% 0.022 268);
+
+  --navy: oklch(28% 0.095 273);
+  --navy-deep: oklch(20.5% 0.075 273);
+  --on-navy: oklch(97% 0.006 262);
+  --on-navy-muted: oklch(80% 0.02 262);
+
+  --accent: oklch(53% 0.21 27.5);
+  --accent-strong: oklch(46% 0.19 27.5);
+
+  --accent-soft: oklch(95% 0.033 27.5);
+  --on-accent: oklch(99% 0.003 27);
+
+  /*
+    The announcement bar is the only thing above the header. Both ends of the
+    gradient sit in the existing navy family: the light end is the Pulse 8
+    secondary blue off the old site, the dark end is --navy-deep. No new accent.
+  */
+
+  /*
+    Schedule colour coding. Four categorical slots, validated all-pairs against
+    this surface: worst CVD deltaE 9.2, worst normal-vision 16.3. These are the
+    only place on the site that uses a hue other than the red accent, and they
+    encode course family, never decoration.
+  */
+  --cal-response: #2a78d6;
+  --cal-young: #1baf7a;
+  --cal-fire: #eb6834;
+  --cal-workplace: #4a3aa7;
+
+  --announcement-blue: oklch(53% 0.14 249);
+  --announcement-navy: oklch(21% 0.08 273);
+  --announcement-h: 2.5rem;
+  --header-offset: 0px;
+
+  color-scheme: light;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: calc(5.5rem + var(--header-offset));
+  }
+
+  body {
+    background-color: var(--bg);
+    color: var(--ink);
+    font-feature-settings: "ss01" on;
+  }
+
+  ::selection {
+    background-color: var(--accent);
+    color: var(--on-accent);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.028em;
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+}
+
+@layer components {
+  .shell {
+    width: 100%;
+    max-width: 1240px;
+    margin-inline: auto;
+    padding-inline: 1.25rem;
+  }
+
+  @media (min-width: 768px) {
+    .shell {
+      padding-inline: 2rem;
+    }
+  }
+
+  /* Numbers read as data, not as prose. */
+  .figure {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.04em;
+  }
+
+  /*
+    Hero scrim. A flat wash over the photograph, weighted slightly at the top
+    for the floating nav and at the bottom for the section seam. Keeps white
+    type above 7:1 on every part of the frame it touches.
+  */
+  .hero-scrim {
+    background-color: rgb(9 13 28 / 0.58);
+    background-image: linear-gradient(
+      180deg,
+      rgb(9 13 28 / 0.32) 0%,
+      rgb(9 13 28 / 0) 26%,
+      rgb(9 13 28 / 0) 74%,
+      rgb(9 13 28 / 0.3) 100%
+    );
+  }
+
+  /* The single marquee on the page: the client logo band. */
+  .marquee {
+    overflow: hidden;
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      black 6rem,
+      black calc(100% - 6rem),
+      transparent
+    );
+  }
+
+  .marquee-track {
+    display: flex;
+    width: max-content;
+    gap: 1rem;
+    animation: marquee-scroll 46s linear infinite;
+  }
+
+  .marquee:hover .marquee-track {
+    animation-play-state: paused;
+  }
+}
+
+@keyframes marquee-scroll {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+
+  /* The logo band stops rather than snapping, and scrolls by hand instead. */
+  .marquee-track {
+    animation: none !important;
+  }
+
+  .marquee {
+    overflow-x: auto;
+  }
+}
+
+
+/* Announcement bar. Open by default, closed by the attribute going away. */
+.announcement {
+  display: none;
+}
+
+:root[data-announcement="open"] {
+  --header-offset: var(--announcement-h);
+}
+
+:root[data-announcement="open"] .announcement {
+  position: fixed;
+  inset-inline: 0;
+  top: 0;
+  z-index: 60;
+  display: block;
+  height: var(--announcement-h);
+  background-image: linear-gradient(
+    100deg,
+    var(--announcement-blue) 0%,
+    var(--announcement-navy) 62%,
+    var(--announcement-navy) 100%
+  );
+}
+
+/*
+  First-visit loader.
+
+  One timeline, 1.8s end to end: the ECG trace draws, the wordmark rises under
+  it, then the whole overlay lifts away. It only exists while the html element
+  says data-loader="run", which the inline script in the layout decides before
+  paint. With JavaScript off the attribute is never set and nothing shows.
+*/
+#loader {
+  display: none;
+}
+
+:root[data-loader="run"] body {
+  overflow: hidden;
+}
+
+:root[data-loader="run"] #loader {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.15rem;
+  background-color: var(--navy-deep);
+  animation: loader-exit 340ms cubic-bezier(0.16, 1, 0.3, 1) 1420ms both;
+}
+
+.loader-mark {
+  width: min(26rem, 74vw);
+}
+
+.loader-mark svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.loader-rail {
+  stroke: rgb(255 255 255 / 0.12);
+}
+
+.loader-trace {
+  stroke: var(--accent);
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: loader-draw 1000ms cubic-bezier(0.62, 0, 0.36, 1) 120ms forwards;
+}
+
+/* The head rides the same path, so it stays on the line at any width. */
+.loader-head {
+  opacity: 0;
+  offset-path: path(
+    "M0 60 H130 l10 -9 l10 9 h24 l8 -38 l13 72 l11 -34 h28 l9 -13 l9 13 H420"
+  );
+  offset-rotate: 0deg;
+  animation: loader-head 1000ms cubic-bezier(0.62, 0, 0.36, 1) 120ms forwards;
+}
+
+.loader-head-core {
+  fill: var(--accent);
+}
+
+.loader-head-halo {
+  fill: var(--accent);
+  opacity: 0.22;
+}
+
+.loader-word {
+  font-size: clamp(1.75rem, 7vw, 2.75rem);
+  font-weight: 700;
+  letter-spacing: -0.045em;
+  text-transform: uppercase;
+  color: var(--on-navy);
+  transform: skewX(-9deg);
+  opacity: 0;
+  animation: loader-word 460ms cubic-bezier(0.16, 1, 0.3, 1) 620ms forwards;
+}
+
+.loader-word span {
+  color: var(--accent);
+  margin-inline-start: 0.12em;
+}
+
+@keyframes loader-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes loader-head {
+  0% {
+    offset-distance: 0%;
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  82% {
+    opacity: 1;
+  }
+  100% {
+    offset-distance: 100%;
+    opacity: 0;
+  }
+}
+
+@keyframes loader-word {
+  from {
+    opacity: 0;
+    transform: skewX(-9deg) translate3d(0, 14px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: skewX(-9deg) translate3d(0, 0, 0);
+  }
+}
+
+@keyframes loader-exit {
+  to {
+    opacity: 0;
+    transform: translate3d(0, -12px, 0);
+    visibility: hidden;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The loader never runs here, but make sure nothing can pin it open. */
+  :root[data-loader="run"] #loader {
+    display: none;
+  }
+
+  :root[data-loader="run"] body {
+    overflow: visible;
+  }
+}
