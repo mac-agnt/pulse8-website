@@ -92,6 +92,23 @@ APIs, so nothing was retyped by hand:
 Not ported: the WooCommerce account and checkout pages, and the theme's demo
 FAQ items under /faq-items, which were never Pulse 8 content. Both redirect.
 
+## Deploying to Vercel
+
+Import the repository in Vercel; the defaults (Next.js preset, `npm run build`)
+are right and no `vercel.json` is needed.
+
+- **`ADMIN_PASSWORD`** (optional). The content dashboard at `/admin` is open in
+  development only. In production `proxy.ts` puts it behind basic auth using
+  this variable (any user name). Leave it unset and `/admin` and its API return
+  404.
+- **Dashboard saves do not persist on Vercel.** It writes
+  `content/site-content.json`, and Vercel's file system is read-only, so a save
+  there returns a clear "saving is not available" message. Make content edits
+  locally, commit the file, and redeploy, or move storage to a service such as
+  Vercel Blob before relying on the dashboard in production.
+- `sitemap.xml` and `robots.txt` are generated for `https://pulse8.ie`, and
+  every old WordPress URL redirects (see `next.config.ts`).
+
 ## Before this goes live
 
 1. **Confirm four durations.** `patient-moving-handling-course` (18 hours),

@@ -8,7 +8,9 @@ import { defaultContent, mergeContent, type SiteContent } from "@/lib/content";
  * A JSON file on disk, not a database: the dashboard is a single-editor tool
  * and the site is small enough that a file is the honest shape for it. Works
  * under `next dev` and on any node host with a writable filesystem. On a
- * read-only or ephemeral filesystem (serverless), saves will not persist.
+ * read-only filesystem (Vercel and other serverless hosts) the write throws
+ * and the API reports that saving is unavailable; the site itself keeps
+ * rendering from whatever file shipped with the build, or the defaults.
  */
 
 const FILE = path.join(process.cwd(), "content", "site-content.json");

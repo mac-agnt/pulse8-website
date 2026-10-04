@@ -56,6 +56,7 @@ export default function RootLayout({
     <html
       lang="en-IE"
       data-announcement="open"
+      data-scroll-behavior="smooth"
       className={`${lexend.variable} antialiased`}
       suppressHydrationWarning
     >

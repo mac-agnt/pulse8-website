@@ -76,7 +76,11 @@ export function AdminShell({ initialContent }: { initialContent: SiteContent }) 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(content),
       });
-      if (!response.ok) throw new Error(`Save failed (${response.status})`);
+      if (!response.ok) {
+        // The API explains itself (a read-only host, bad input); show that.
+        const detail = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(detail?.error ?? `Save failed (${response.status})`);
+      }
       const next = (await response.json()) as SiteContent;
       setContent(next);
       setSaved(next);
