@@ -29,7 +29,7 @@ export function CopyPanel({
               onChange={(event) => onChange({ hero: { ...hero, eyebrow: event.target.value } })}
             />
           </Field>
-          <Field label="Headline" hint="Two lines at most. No exclamation marks.">
+          <Field label="Headline" hint="Two lines at most. Wrap words in *asterisks* to give them the gradient.">
             <TextInput
               value={hero.headline}
               onChange={(event) => onChange({ hero: { ...hero, headline: event.target.value } })}
@@ -110,7 +110,7 @@ export function CopyPanel({
         </div>
       </Card>
 
-      <Card id="copy-steps" title="Booking steps" description="The three steps beside the numbers band">
+      <Card id="copy-steps" title="Booking steps" description="The steps under the instructors section on the home page">
         <div className="flex flex-col gap-5">
           <Field label="Section heading">
             <TextInput

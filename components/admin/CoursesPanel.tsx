@@ -144,7 +144,7 @@ export function CoursesPanel({
         <div className="flex flex-col gap-5">
           <Card
             title={active.title}
-            description={`Appears on the courses grid and at /book?course=${active.slug}`}
+            description={`Appears on the courses grid, at /courses/${active.slug} and at /book?course=${active.slug}`}
             action={
               <button
                 type="button"

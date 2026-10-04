@@ -7,7 +7,8 @@
   structural dark, everything else is a cool neutral. No second accent anywhere.
 
   Radius: buttons and inputs 10px, cards and media 16px, chips fully rounded.
-  Nothing else gets a radius.
+  The one exception is the hero frame (--frame-radius), which is big enough to
+  need a bigger curve. Nothing else gets a radius.
 */
 
 @theme inline {
@@ -38,26 +39,38 @@
 }
 
 :root {
-  --bg: oklch(97.6% 0.004 262);
-  --surface: oklch(99.5% 0.001 262);
-  --tint: oklch(95.4% 0.009 262);
-  --border: oklch(89.5% 0.011 262);
-  --border-soft: oklch(93.5% 0.008 262);
+  /*
+    Neutrals share one cool hue (255) at very low chroma, so the page reads as
+    off-white rather than blue-grey, and every grey sits in the same family as
+    the navy. Ink is the navy taken almost to black.
+  */
+  --bg: oklch(97.6% 0.0035 255);
+  --surface: oklch(99.4% 0.0015 255);
+  --tint: oklch(95.2% 0.006 255);
+  --border: oklch(90.2% 0.008 255);
+  --border-soft: oklch(93.7% 0.006 255);
 
-  --ink: oklch(24% 0.045 268);
-  --ink-muted: oklch(47% 0.03 268);
-  --ink-faint: oklch(60% 0.022 268);
+  --ink: oklch(22.5% 0.032 262);
+  --ink-muted: oklch(46% 0.022 260);
+  /* 4.6:1 on --bg, the floor for the small labels it carries. */
+  --ink-faint: oklch(54.5% 0.018 258);
 
-  --navy: oklch(28% 0.095 273);
-  --navy-deep: oklch(20.5% 0.075 273);
-  --on-navy: oklch(97% 0.006 262);
-  --on-navy-muted: oklch(80% 0.02 262);
+  /* A true navy, without the violet the old 273 hue carried. */
+  --navy: oklch(28% 0.075 262);
+  --navy-deep: oklch(20% 0.055 264);
+  --on-navy: oklch(97% 0.005 255);
+  --on-navy-muted: oklch(79% 0.018 258);
 
-  --accent: oklch(53% 0.21 27.5);
-  --accent-strong: oklch(46% 0.19 27.5);
+  /*
+    The Pulse 8 red, pulled back from the edge of the gamut: a touch deeper and
+    less saturated, so it reads as crimson rather than signage. 5.9:1 under
+    white text. Strong is the hover and small-text shade.
+  */
+  --accent: oklch(52% 0.188 25);
+  --accent-strong: oklch(45.5% 0.165 24.5);
 
-  --accent-soft: oklch(95% 0.033 27.5);
-  --on-accent: oklch(99% 0.003 27);
+  --accent-soft: oklch(95.6% 0.02 22);
+  --on-accent: oklch(99% 0.003 25);
 
   /*
     The announcement bar is the only thing above the header. Both ends of the
@@ -76,12 +89,24 @@
   --cal-fire: #eb6834;
   --cal-workplace: #4a3aa7;
 
-  --announcement-blue: oklch(53% 0.14 249);
-  --announcement-navy: oklch(21% 0.08 273);
+  --announcement-blue: oklch(42% 0.1 256);
+  --announcement-navy: oklch(20% 0.055 264);
   --announcement-h: 2.5rem;
   --header-offset: 0px;
 
+  /* Hero frame: the white border and corner curve the photograph settles into. */
+  --frame-inset: 0.75rem;
+  --frame-radius: 1.5rem;
+  --hero-run: 45svh;
+
   color-scheme: light;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --frame-inset: 1.25rem;
+    --frame-radius: 2rem;
+  }
 }
 
 @layer base {
@@ -140,19 +165,82 @@
   }
 
   /*
-    Hero scrim. A flat wash over the photograph, weighted slightly at the top
-    for the floating nav and at the bottom for the section seam. Keeps white
-    type above 7:1 on every part of the frame it touches.
+    Hero scrim. A flat wash of the deep navy over the photograph, weighted
+    slightly at the top for the floating nav and at the bottom for the section
+    seam. Keeps white type above 7:1 on every part of the frame it touches.
   */
   .hero-scrim {
-    background-color: rgb(9 13 28 / 0.58);
+    background-color: color-mix(in oklab, var(--navy-deep) 60%, transparent);
     background-image: linear-gradient(
       180deg,
-      rgb(9 13 28 / 0.32) 0%,
-      rgb(9 13 28 / 0) 26%,
-      rgb(9 13 28 / 0) 74%,
-      rgb(9 13 28 / 0.3) 100%
+      color-mix(in oklab, var(--navy-deep) 32%, transparent) 0%,
+      transparent 26%,
+      transparent 74%,
+      color-mix(in oklab, var(--navy-deep) 30%, transparent) 100%
     );
+  }
+
+  /*
+    Hero frame. The track is white; the pinned panel inside it holds the
+    photograph, which HeroFrame clips inward as the page scrolls. The track
+    starts under the fixed announcement bar so the frame sits below it, and
+    --hero-run is how much scroll the frame takes to form.
+  */
+  .hero-track {
+    position: relative;
+    background-color: var(--surface);
+    padding-top: var(--header-offset);
+  }
+
+  .hero-pin {
+    position: sticky;
+    top: var(--header-offset);
+    isolation: isolate;
+    display: flex;
+    align-items: center;
+    min-height: calc(100svh - var(--header-offset));
+  }
+
+  .hero-media {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    will-change: clip-path;
+  }
+
+  /* Its own compositor layer: the zoom is a transform on a cached raster. */
+  .hero-zoom {
+    position: absolute;
+    inset: 0;
+    will-change: transform;
+  }
+
+  .hero-run {
+    height: var(--hero-run);
+  }
+
+  /*
+    The one gradient on the site, on the key words of the hero headline. A
+    soft sweep that drifts slowly, in the manner of Apple's Intelligence type,
+    kept to the brand: the Pulse 8 red, warmed and lightened to read on the
+    photograph, through a pale tint into the brand secondary blue.
+  */
+  .hero-gradient {
+    background-image: linear-gradient(
+      100deg,
+      oklch(70% 0.21 27) 0%,
+      oklch(77% 0.16 34) 28%,
+      oklch(86% 0.07 262) 58%,
+      oklch(75% 0.13 249) 82%,
+      oklch(70% 0.2 27) 100%
+    );
+    background-size: 220% 100%;
+    background-position: 0% 50%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    animation: hero-gradient-drift 8s ease-in-out infinite alternate;
   }
 
   /* The single marquee on the page: the client logo band. */
@@ -179,6 +267,31 @@
   }
 }
 
+/* FAQ answers rise in as their row opens. Transform and opacity only. */
+details[open] > .faq-answer {
+  animation: faq-open 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes faq-open {
+  from {
+    opacity: 0;
+    transform: translate3d(0, -4px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes hero-gradient-drift {
+  from {
+    background-position: 0% 50%;
+  }
+  to {
+    background-position: 100% 50%;
+  }
+}
+
 @keyframes marquee-scroll {
   from {
     transform: translate3d(0, 0, 0);
@@ -199,6 +312,40 @@
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
+  }
+
+  /* No pinning and no scrub: the hero simply shows its framed state. */
+  .hero-pin {
+    position: relative;
+  }
+
+  .hero-run {
+    display: none;
+  }
+
+  .hero-media {
+    clip-path: inset(var(--frame-inset) round var(--frame-radius)) !important;
+  }
+
+  .hero-zoom {
+    transform: none !important;
+  }
+
+  .hero-gradient {
+    animation: none !important;
+  }
+
+  .hl-word {
+    color: var(--ink) !important;
+  }
+
+  /* The booking rail shows finished: every segment filled, every step lit. */
+  .process-fill {
+    transform: none !important;
+  }
+
+  .process-dot {
+    opacity: 1 !important;
   }
 
   /* The logo band stops rather than snapping, and scrolls by hand instead. */

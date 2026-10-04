@@ -6,10 +6,10 @@ import { Accreditation } from "@/components/sections/Accreditation";
 import { About } from "@/components/sections/About";
 import { Courses } from "@/components/sections/Courses";
 import { Sectors } from "@/components/sections/Sectors";
-import { BoldStats } from "@/components/sections/BoldStats";
 import { Testimonials } from "@/components/sections/Testimonials";
 import { Supplies } from "@/components/sections/Supplies";
 import { Contact } from "@/components/sections/Contact";
+import { Faq } from "@/components/sections/Faq";
 import { Footer } from "@/components/sections/Footer";
 import { readContent } from "@/lib/content.server";
 
@@ -26,15 +26,15 @@ export default async function HomePage() {
       <Header overlay />
       <main>
         <Hero copy={content.hero} />
-        <Overview facts={content.facts} />
         <Accreditation />
-        <About />
+        <Overview facts={content.facts} />
+        <About process={content.process} />
         <Courses courses={content.courses} />
         <Sectors />
-        <BoldStats facts={content.facts} process={content.process} />
         <Testimonials />
         <Supplies />
         <Contact />
+        <Faq />
       </main>
       <Footer />
     </>

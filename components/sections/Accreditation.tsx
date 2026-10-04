@@ -1,91 +1,61 @@
 import Image from "next/image";
+import { ArrowRight } from "@phosphor-icons/react/dist/ssr";
+import { Button } from "@/components/ui/Button";
+import { RevealGroup, RevealItem } from "@/components/ui/Reveal";
 import { clients } from "@/lib/data";
 
 /**
- * The trust band that carries the hero into the page.
+ * Who Pulse 8 has trained, directly under the Overview.
  *
- * The client logos. The approval marks are stated once, above the fold in the
- * hero, rather than again here. The top of the section is a gradient pulled up
- * over the last inches of the hero photograph so the frame dissolves into the
- * page rather than ending on a hard line.
- *
- * This is the one marquee on the site. It is CSS only, the track is the list
- * rendered twice so the loop has no seam, and the second copy is hidden from
- * assistive tech. The logos are PNGs with the white knocked out, so they sit
- * straight on the page ground with no chip and no blend mode. Bodies that have
- * not supplied a licensed mark ride along as wordmarks.
- *
- * The PHECC "since 2010" line that used to sit here is not lost: the Facts band
- * further down states it as one of the four figures.
+ * One intro card that spans the full height on the left, the client marks as a
+ * grid of equal cards beside it. The logos are PNGs with the white knocked out,
+ * so they sit straight on the card with no chip. The cards rise in a stagger as
+ * the grid enters view.
  */
-
-type BandItem = { key: string; name: string; logo?: string };
-
-const items: BandItem[] = clients.map((client) => ({
-  key: `client-${client.name}`,
-  name: client.name,
-  logo: client.logo,
-}));
-
-/**
- * The track travels its own width, so the duration has to scale with how many
- * items are on it. Otherwise the band speeds up every time one is added.
- */
-const durationSeconds = Math.round(items.length * 3.6);
-
 export function Accreditation() {
   return (
-    <section aria-label="Clients" className="relative">
-      {/*
-        The hero scrim bottoms out at rgb(9 13 28). Starting the fade from
-        transparent over that exact frame means the seam has no edge to see.
-      */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none -mt-24 h-24 bg-gradient-to-b from-transparent to-bg md:-mt-32 md:h-32"
-      />
+    <section aria-label="Clients" className="px-3 py-3 md:px-5 md:py-5">
+      <RevealGroup
+        className="mx-auto grid max-w-[1240px] grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 lg:grid-rows-4"
+        step={0.05}
+      >
+        <RevealItem className="col-span-2 flex flex-col justify-between gap-12 rounded-[var(--radius-card)] bg-tint p-6 md:col-span-3 md:p-8 lg:col-span-1 lg:row-span-4">
+          <h2 className="text-[2.25rem] leading-none font-semibold tracking-[-0.035em] text-ink md:text-5xl">
+            Trusted by
+          </h2>
+          <div>
+            <p className="max-w-[34ch] text-[0.9375rem] leading-relaxed text-ink-muted">
+              Schools, colleges, hotels and sports clubs across Ireland book Pulse 8 to
+              train their teams on site.
+            </p>
+            <Button href="#contact" size="lg" className="mt-6 rounded-full">
+              Request a quote
+              <ArrowRight size={16} weight="bold" />
+            </Button>
+          </div>
+        </RevealItem>
 
-      <div className="bg-bg pb-16 md:pb-20">
-        <p className="shell text-[0.9375rem] text-ink-faint">Training delivered for</p>
-
-        <div className="marquee mt-7 bg-bg">
-          <ul
-            className="marquee-track"
-            style={{ animationDuration: `${durationSeconds}s` }}
+        {clients.map((client) => (
+          <RevealItem
+            key={client.name}
+            className="group grid h-36 place-items-center rounded-[var(--radius-card)] bg-tint px-6 transition-colors duration-200 hover:bg-surface md:h-40 lg:h-auto"
           >
-            {[...items, ...items].map((item, index) => (
-              <li
-                key={`${item.key}-${index}`}
-                aria-hidden={index >= items.length}
-                className="flex min-w-40 shrink-0 items-center justify-center px-4 md:min-w-48"
-              >
-                {item.logo ? (
-                  /*
-                    One frame for every mark, with the image fitted inside it.
-                    They run from a square shield to a wordmark three times as
-                    wide, so a shared height would leave the wide ones enormous
-                    and the square ones tiny. Fitting them into a fixed box
-                    instead gives the row one optical weight. The box cannot be
-                    sized from the file: an <img> with width and height set gets
-                    its aspect ratio from those attributes, not from the source.
-                  */
-                  <Image
-                    src={item.logo}
-                    alt={item.name}
-                    width={272}
-                    height={96}
-                    className="h-12 w-34 object-contain"
-                  />
-                ) : (
-                  <span className="text-[0.9375rem] font-medium tracking-tight whitespace-nowrap text-ink-faint">
-                    {item.name}
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
+            {client.logo ? (
+              <Image
+                src={client.logo}
+                alt={client.name}
+                width={272}
+                height={96}
+                className="h-14 w-full max-w-40 object-contain transition-transform duration-300 ease-out group-hover:-translate-y-0.5 motion-reduce:transition-none"
+              />
+            ) : (
+              <span className="text-center text-[0.9375rem] font-medium tracking-tight text-ink-muted">
+                {client.name}
+              </span>
+            )}
+          </RevealItem>
+        ))}
+      </RevealGroup>
     </section>
   );
 }

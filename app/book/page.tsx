@@ -6,6 +6,8 @@ import { BookingCalendar } from "@/components/booking/BookingCalendar";
 import {
   buildSchedule,
   expandExtraSessions,
+  formatDayShort,
+  formatPrice,
   isoDate,
   mergeSessions,
 } from "@/lib/schedule";
@@ -34,30 +36,53 @@ export default async function BookPage({
     expandExtraSessions(content.extraSessions, content.courses),
   );
 
+  const todayIso = isoDate(now);
+  const upcoming = sessions.filter((session) => session.date >= todayIso);
+  const next = upcoming.find((session) => session.seatsLeft > 0);
+  const lowest = upcoming.length ? Math.min(...upcoming.map((session) => session.price)) : null;
+  const stats = [
+    next ? { label: "Next date", value: formatDayShort(next.date) } : null,
+    { label: "Dates open", value: String(upcoming.length) },
+    lowest !== null ? { label: "Prices from", value: formatPrice(lowest) } : null,
+  ].filter((item): item is { label: string; value: string } => item !== null);
+
   return (
     <>
       <AnnouncementBar />
       <Header />
-      <main className="pt-[calc(6rem+var(--header-offset))] pb-20 md:pt-[calc(8rem+var(--header-offset))] md:pb-28">
-        <div className="shell">
-          <p className="text-[0.8125rem] font-medium tracking-[0.14em] text-ink-muted uppercase">
-            Course dates
-          </p>
-          <h1 className="mt-4 max-w-[18ch] text-[2.25rem] leading-[1.06] font-semibold tracking-[-0.032em] sm:text-[2.75rem] lg:text-[3.25rem]">
-            Pick a date that suits
-          </h1>
-          <p className="mt-5 max-w-[54ch] text-lg text-ink-muted">
-            Everything running over the next four months, with the price on every date.
-            Move through the months, filter to one course, then pick a day to see its
-            times.
-          </p>
-        </div>
+      <main className="pb-20 md:pb-28">
+        <section className="bg-navy-deep pt-[calc(7.5rem+var(--header-offset))] pb-32 text-on-navy md:pt-[calc(9.5rem+var(--header-offset))] md:pb-44">
+          <div className="shell grid gap-10 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+            <div>
+              <h1 className="max-w-[16ch] text-[2.5rem] leading-[1.02] font-semibold tracking-[-0.035em] text-white sm:text-[3.25rem] lg:text-[4rem]">
+                Pick a date that suits
+              </h1>
+              <p className="mt-5 max-w-[52ch] text-lg leading-relaxed text-on-navy-muted">
+                Everything running over the next four months, with the price on every
+                date. Filter to one course, pick a day, and book your place.
+              </p>
+            </div>
 
-        {/* The calendar wants more room than the page shell allows. */}
-        <div className="mx-auto mt-10 w-full max-w-[1600px] px-5 md:mt-12 md:px-8">
+            <dl className="flex gap-8 border-t border-white/15 pt-6 lg:gap-10 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-10">
+              {stats.map((stat) => (
+                <div key={stat.label}>
+                  <dt className="text-[0.75rem] font-medium tracking-[0.1em] text-on-navy-muted uppercase">
+                    {stat.label}
+                  </dt>
+                  <dd className="figure mt-2 text-2xl font-semibold text-white md:text-[1.75rem]">
+                    {stat.value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        </section>
+
+        {/* The calendar wants more room than the page shell allows, and rises over the band. */}
+        <div className="relative z-10 mx-auto -mt-20 w-full max-w-[1600px] px-3 md:-mt-28 md:px-8">
           <BookingCalendar
             sessions={sessions}
-            today={isoDate(now)}
+            today={todayIso}
             initialCourse={course}
           />
         </div>

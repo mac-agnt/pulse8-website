@@ -1,7 +1,8 @@
 # Pulse 8 website
 
-A rebuild of the pulse8.ie landing page. Same company, same courses, same
-accreditation, new front end.
+A rebuild of pulse8.ie. Same company, same courses, same accreditation, same
+shop, new front end. Everything public on the old WordPress site has a home
+here, and every old URL redirects to it.
 
 ## Running it
 
@@ -21,16 +22,32 @@ Framer Motion, Phosphor icons. Matches the stack in `Pulse8-demo`.
 
 ```
 app/
-  layout.tsx     fonts, metadata, pre-paint theme script
-  page.tsx       section order
-  globals.css    colour and radius tokens, marquee, reduced-motion overrides
+  layout.tsx             fonts, metadata, pre-paint theme script
+  page.tsx               home page section order (FAQ is the last section)
+  globals.css            colour and radius tokens, marquee, reduced-motion overrides
+  courses/               all courses, online courses band, /courses/<slug> pages
+  shop/                  store index and /shop/<category>
+  product/[slug]/        product pages, same URL as the old WooCommerce store
+  cart/                  basket and order request
+  about/  contact/       ported company pages
+  policies/              index, cancellation, privacy and cookie policies
+  book/                  course dates calendar
+  admin/                 content dashboard
 components/
-  sections/      one file per band of the page
-  ui/            Button, Reveal, ThemeToggle
+  sections/              one file per band of the home page
+  shop/                  store cards, gallery, basket, order form
+  policies/              policy article renderer
+  layout/PageShell.tsx   header, announcement and footer for inner pages
+  ui/                    Button, Reveal, PageIntro
 lib/
-  data.ts        every course, sector, client and quote on the page
-  motion.ts      easing, durations, viewport settings
-public/          images pulled from the live pulse8.ie media library
+  data.ts                courses, sectors, clients, testimonials, FAQ, nav
+  course-details.ts      long-form course page content
+  shop.ts                every product, price and category
+  basket.ts              client basket store (localStorage)
+  policies.ts            policy text and learner policy PDFs
+  motion.ts              easing, durations, viewport settings
+next.config.ts           redirects from every old pulse8.ie URL
+public/                  images and PDFs pulled from pulse8.ie
 ```
 
 ## Design decisions
@@ -49,9 +66,31 @@ public/          images pulled from the live pulse8.ie media library
 
 ## Content that came from the live site
 
-Course titles, durations, class sizes, delivery modes, certificates, the client
-list, the three testimonials and all photography are taken from pulse8.ie. The
-short course descriptions were rewritten from the live course pages.
+Ported from pulse8.ie in October 2026, through its WordPress and WooCommerce
+APIs, so nothing was retyped by hand:
+
+- **Courses.** Titles, durations, class sizes, delivery modes, certificates and
+  photography, plus the full body of every course page (syllabus, who should
+  attend, certification, what you receive) in `lib/course-details.ts`. Spelling
+  was corrected; wording was not changed. The short card descriptions were
+  rewritten from those pages.
+- **Online courses.** The "Buy now" links to the Pulse 8 e-learning portal on
+  videotilehost.com, for the eight courses the old site sold online.
+- **Shop.** All 49 products across 11 categories, with prices, descriptions and
+  photographs (now in `/public/shop`). The nitrile gloves keep their size
+  choice. Names were moved out of capitals and supplier typos fixed.
+- **Testimonials.** The three published reviews, word for word, with the job
+  titles the old site gave them.
+- **FAQ.** The nine questions from /faqs, now the last section of the home page.
+- **Policies.** The twelve learner policy PDFs (now in `/public/documents`) and
+  the cancellation and privacy policies word for word. The cookie policy was
+  adapted, see below.
+- **About and contact.** The old about page copy, the "trusted nationwide"
+  figures and the client logos; the quote form's extra fields (group or
+  individual, course, county).
+
+Not ported: the WooCommerce account and checkout pages, and the theme's demo
+FAQ items under /faq-items, which were never Pulse 8 content. Both redirect.
 
 ## Before this goes live
 
@@ -63,10 +102,22 @@ short course descriptions were rewritten from the live course pages.
 2. **Wire the quote form.** `components/sections/QuoteForm.tsx` holds a sending
    state and then reports success without posting anywhere. Point it at the
    Gravity Forms endpoint or a route handler.
-3. **Accreditation marks.** Only PHECC supplied a logo. HSA, CPD, IIRSM, IOSH and
+3. **Wire the shop order form.** `sendOrderRequest` in
+   `components/shop/OrderRequestForm.tsx` waits and then succeeds; the typed
+   order (customer, lines, subtotal) is already assembled for it. The old store
+   took card payments through Stripe, so the likely next step is a Stripe
+   Checkout session from a route handler, in place of the order request.
+4. **Review the cookie policy.** Sections 1 to 4 and the rights section are the
+   old text. The old list of cookies described WordPress, WooCommerce,
+   Complianz and Sourcebuster, none of which run here, so it was replaced with
+   what this site actually stores (three browser storage entries, no tracking).
+   Have whoever owns compliance sign it off, and update it if analytics are
+   added.
+5. **Accreditation marks.** Only PHECC supplied a logo. HSA, CPD, IIRSM, IOSH and
    Gatehouse Awards are set as wordmarks rather than invented marks. Swap in real
    artwork when the client provides it.
-4. **Course links.** Cards link out to the existing pulse8.ie course pages. If
-   those pages move into this app, change the `href` in `Courses.tsx`.
-5. **Google rating.** The 5.0 figure comes from the current site's own claim.
-   Check it still holds before publishing.
+6. **Google rating and figures.** The 5.0 rating, 4,000+ students, 200+ clients
+   and 100% satisfaction all come from the current site's own claims. Check they
+   still hold before publishing.
+7. **Course prices.** Still placeholders, see the note at the top of
+   `lib/data.ts`. Shop prices are the real published ones.

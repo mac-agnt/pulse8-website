@@ -46,6 +46,20 @@ export const courses: Course[] = [
     headline: true,
   },
   {
+    slug: "first-aid-response-blended",
+    price: 275,
+    title: "First Aid Response (Blended)",
+    blurb:
+      "The same PHECC First Aid Response standard, with the theory done online at your own pace and the practical assessed in person.",
+    duration: "18 hours",
+    // New course. Duration and price are placeholders until Pulse 8 confirms them.
+    unverifiedDuration: true,
+    maxParticipants: 8,
+    delivery: "Blended",
+    certificate: "PHECC",
+    image: "/courses/first-aid-response.webp",
+  },
+  {
     slug: "first-aid-response-recertification",
     price: 195,
     title: "First Aid Response Recertification",
@@ -305,34 +319,46 @@ export type Fact = { value: string; label: string; note: string };
 export const facts: Fact[] = [
   { value: "2010", label: "Training since", note: "Sixteen years in the field" },
   { value: "PHECC", label: "Approved Training Institute", note: "Assessed and audited" },
-  { value: "18", label: "Courses", note: "Classroom, blended and online" },
+  { value: "19", label: "Courses", note: "Classroom, blended and online" },
   { value: "5.0", label: "Google rating", note: "From verified reviews" },
 ];
 
 export type Testimonial = { quote: string; name: string; role: string; avatar: string };
 
+/**
+ * The three reviews published on pulse8.ie, word for word, with the job titles
+ * the old site gave them. A quote is someone else's words, so it is not edited
+ * for house style.
+ */
 export const testimonials: Testimonial[] = [
   {
     quote:
-      "Great course, clear instruction, and useful skills. I highly recommend Pulse 8 for first aid training.",
+      "Great course, clear instruction, and useful skills. I highly recommend Pulse 8 for first aid training!",
     name: "James Fitzpatrick",
-    role: "First Aid Response",
+    role: "Business Owner",
     avatar: "/people/james-fitzpatrick.png",
   },
   {
     quote:
-      "The instructors were excellent. The mix of theory and hands-on practice made all the difference.",
+      "The instructors were amazing! The mix of theory and hands-on practice made all the difference.",
     name: "Mary Kate Doyle",
-    role: "Paediatric First Aid",
+    role: "Office Co-ordinator",
     avatar: "/people/mary-kate-doyle.png",
   },
   {
     quote:
-      "Pulse 8's training was engaging and practical. I feel confident handling emergencies now.",
+      "Pulse 8's training was engaging and practical. I feel confident handling emergencies now!",
     name: "Shane Kelly",
-    role: "Cardiac First Response",
+    role: "HR Advisor",
     avatar: "/people/shane-kelly.png",
   },
+];
+
+/** Headline figures from the "Trusted nationwide" band on pulse8.ie. */
+export const trustFigures = [
+  { value: "4,000+", label: "Students trained" },
+  { value: "200+", label: "Clients in Ireland" },
+  { value: "100%", label: "Customer satisfaction" },
 ];
 
 /**
@@ -378,24 +404,23 @@ export const clients: Client[] = [
   { name: "Henry J Lyons", logo: "/clients/henry-j-lyons.png" },
   { name: "The Goat", logo: "/clients/the-goat.png" },
   { name: "The Bank", logo: "/clients/the-bank.png" },
-  { name: "Fitzsimons", logo: "/clients/fitzsimons.png" },
 ];
 
 export const supplies = [
   {
     name: "Defibrillators",
     description: "Semi-automatic AEDs, cabinets, pads and batteries.",
-    href: "https://pulse8.ie/defibrillators/",
+    href: "/shop/defibrillators",
   },
   {
     name: "First aid supplies",
     description: "Workplace, school and montessori kits, restocked to spec.",
-    href: "https://pulse8.ie/first-aid-supplies/",
+    href: "/shop/first-aid-supplies",
   },
   {
     name: "Signage and bags",
     description: "AED signage, response bags and wall-mounted cabinets.",
-    href: "https://pulse8.ie/aed-bags-signs/",
+    href: "/shop/aed-bags-signs",
   },
 ];
 
@@ -406,9 +431,61 @@ export const contact = {
 };
 
 export const nav = [
-  { label: "Courses", href: "/#courses" },
-  { label: "Sectors", href: "/#sectors" },
-  { label: "How it works", href: "/#how" },
-  { label: "Equipment", href: "/#equipment" },
-  { label: "Contact", href: "/#contact" },
+  { label: "Courses", href: "/courses" },
+  { label: "Shop", href: "/shop" },
+  { label: "About", href: "/about" },
+  { label: "FAQs", href: "/#faq" },
+  { label: "Contact", href: "/contact" },
+];
+
+/**
+ * The FAQ from pulse8.ie/faqs. Answers are the old site's, with the
+ * exclamation marks taken out to match the voice of the rest of the page.
+ */
+export const faqs: Array<{ question: string; answer: string }> = [
+  {
+    question: "What types of health and safety courses do you offer?",
+    answer:
+      "We provide a range of courses, including First Aid, CPR, Fire Safety, Manual Handling, and Workplace Health and Safety training. Whether you're an individual or a business, we have a course to suit your needs.",
+  },
+  {
+    question: "Can I take first aid training online or in person?",
+    answer:
+      "Yes. We offer both online and in-person training, so you can choose what works best for you. Our online courses are flexible, while our in-person training gives you hands-on experience.",
+  },
+  {
+    question: "How long does a typical first aid course take?",
+    answer:
+      "It depends on the course. Basic First Aid training usually takes a few hours, while more advanced courses, like Workplace First Aid, can take a full day or longer.",
+  },
+  {
+    question: "Are your training courses accredited and certified?",
+    answer:
+      "Yes, all our courses are fully accredited and meet Irish health and safety regulations. You'll receive a recognised certificate upon successful completion.",
+  },
+  {
+    question: "What is included in fire safety training?",
+    answer:
+      "Our fire safety training covers fire prevention, emergency procedures, evacuation plans, and proper use of fire extinguishers. It's essential for every workplace.",
+  },
+  {
+    question: "Who should take a manual handling training course?",
+    answer:
+      "Anyone who lifts, moves, or handles objects as part of their job should take this course. It's essential for warehouse staff, healthcare workers, construction workers, and many more.",
+  },
+  {
+    question: "Do I need to renew my first aid certification?",
+    answer:
+      "Yes, most first aid certifications are valid for two years. After that, you'll need to take a refresher course to stay up to date and maintain your certification.",
+  },
+  {
+    question: "Do you offer workplace or group training sessions?",
+    answer:
+      "Absolutely. We provide on-site training for businesses, schools, and organisations. We can also tailor courses to fit your industry and specific requirements.",
+  },
+  {
+    question: "How do I book a course with Pulse 8?",
+    answer:
+      "You can browse our courses online and book a date directly, or get in touch with us for group bookings and tailored training options.",
+  },
 ];

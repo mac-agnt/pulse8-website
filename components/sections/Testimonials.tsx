@@ -6,7 +6,7 @@ import { Star } from "@phosphor-icons/react";
 import { motion } from "framer-motion";
 import { Reveal } from "@/components/ui/Reveal";
 import { cn } from "@/lib/cn";
-import { testimonials, type Testimonial } from "@/lib/data";
+import { testimonials, trustFigures, type Testimonial } from "@/lib/data";
 
 /**
  * Scrolling testimonial wall.
@@ -122,6 +122,14 @@ export function Testimonials() {
           <h2 className="max-w-[20ch] text-3xl leading-[1.1] font-semibold sm:text-4xl lg:text-[2.75rem]">
             What people say afterwards
           </h2>
+          <dl className="mt-8 flex flex-wrap gap-x-10 gap-y-5">
+            {trustFigures.map((figure) => (
+              <div key={figure.label} className="flex flex-col-reverse">
+                <dt className="mt-1 text-[0.875rem] text-ink-muted">{figure.label}</dt>
+                <dd className="figure text-3xl font-semibold text-ink">{figure.value}</dd>
+              </div>
+            ))}
+          </dl>
         </Reveal>
 
         <div

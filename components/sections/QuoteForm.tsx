@@ -3,6 +3,8 @@
 import { useState, type FormEvent } from "react";
 import { CircleNotch, Warning } from "@phosphor-icons/react";
 import { SubmitButton } from "@/components/ui/Button";
+import { cn } from "@/lib/cn";
+import { courses } from "@/lib/data";
 
 type Status = "idle" | "sending" | "sent" | "error";
 
@@ -11,14 +13,27 @@ const field =
 
 const label = "mb-2 block text-[0.875rem] font-medium text-on-navy";
 
+const optional = "font-normal text-on-navy-muted";
+
+/** Same as the old site's quote form: is this for a group or one person. */
+const BOOKING_TYPES = ["Group", "Individual"] as const;
+
 /**
  * No backend on this build. The submit handler holds a sending state and then
  * reports success so the states are all visible; wire it to the Pulse 8 form
  * endpoint before launch.
+ *
+ * The fields are the union of the two forms on the old site: the home page
+ * "send a message" form and the contact page quote form, which also asked
+ * whether it was a group or an individual, which course and which county.
+ * A course page links here with ?course=<slug>, which arrives as
+ * `defaultCourse` and preselects it.
  */
-export function QuoteForm() {
+export function QuoteForm({ defaultCourse = "" }: { defaultCourse?: string }) {
   const [status, setStatus] = useState<Status>("idle");
   const [consent, setConsent] = useState(false);
+  const [bookingType, setBookingType] = useState<(typeof BOOKING_TYPES)[number]>("Group");
+  const knownCourse = courses.some((course) => course.slug === defaultCourse);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -55,19 +70,6 @@ export function QuoteForm() {
       </div>
 
       <div>
-        <label className={label} htmlFor="company">
-          Organisation
-        </label>
-        <input
-          id="company"
-          name="company"
-          required
-          autoComplete="organization"
-          className={field}
-        />
-      </div>
-
-      <div>
         <label className={label} htmlFor="email">
           Email
         </label>
@@ -95,16 +97,82 @@ export function QuoteForm() {
         />
       </div>
 
+      <div>
+        <label className={label} htmlFor="company">
+          Organisation <span className={optional}>(optional)</span>
+        </label>
+        <input id="company" name="company" autoComplete="organization" className={field} />
+      </div>
+
+      <fieldset>
+        <legend className={label}>Group or individual</legend>
+        <div className="grid h-11 grid-cols-2 gap-1 rounded-[var(--radius-control)] border border-white/25 bg-white/10 p-1">
+          {BOOKING_TYPES.map((type) => (
+            <label
+              key={type}
+              className={cn(
+                "flex cursor-pointer items-center justify-center rounded-[7px] text-[0.875rem] font-medium transition-colors duration-200 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent",
+                bookingType === type
+                  ? "bg-white text-navy-deep"
+                  : "text-on-navy-muted hover:text-on-navy",
+              )}
+            >
+              <input
+                type="radio"
+                name="bookingType"
+                value={type}
+                checked={bookingType === type}
+                onChange={() => setBookingType(type)}
+                className="sr-only"
+              />
+              {type}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      <div>
+        <label className={label} htmlFor="county">
+          County
+        </label>
+        <input
+          id="county"
+          name="county"
+          required
+          autoComplete="address-level1"
+          className={field}
+        />
+      </div>
+
+      <div className="sm:col-span-2">
+        <label className={label} htmlFor="course">
+          Course
+        </label>
+        {/* Dark colour scheme so the native option list matches the panel. */}
+        <select
+          id="course"
+          name="course"
+          defaultValue={knownCourse ? defaultCourse : ""}
+          className={`${field} appearance-auto [color-scheme:dark]`}
+        >
+          <option value="">Not sure yet</option>
+          {courses.map((course) => (
+            <option key={course.slug} value={course.slug}>
+              {course.title}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div className="sm:col-span-2">
         <label className={label} htmlFor="message">
-          What do you need
+          Anything else <span className={optional}>(optional)</span>
         </label>
         <textarea
           id="message"
           name="message"
           rows={4}
-          required
-          placeholder="Course, group size and rough dates"
+          placeholder="Group size, rough dates, special requirements"
           className={`${field} h-auto py-3`}
         />
       </div>
@@ -123,7 +191,7 @@ export function QuoteForm() {
           />
           <span>
             I agree to the{" "}
-            <a href="https://pulse8.ie/policies/" className="text-on-navy underline underline-offset-4">
+            <a href="/policies/privacy" className="text-on-navy underline underline-offset-4">
               privacy policy
             </a>
             .

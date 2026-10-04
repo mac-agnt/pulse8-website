@@ -49,27 +49,28 @@ export type SiteContent = {
 export const defaultContent: SiteContent = {
   hero: {
     eyebrow: "PHECC Approved Training Institute",
-    headline: "First aid training that holds up",
+    // Words in *asterisks* get the gradient.
+    headline: "Ready before the *ambulance arrives*",
     subline:
-      "Certified first aid, fire safety and manual handling courses. Taught in your workplace or online, anywhere in Ireland.",
+      "Certified first aid, fire safety and manual handling training. At your workplace, on a public date, or online.",
     primaryCta: "Book a course",
     secondaryCta: "Browse courses",
   },
   facts: defaultFacts,
   process: {
-    heading: "Booking it is the easy part",
+    heading: "From booking to certificate",
     steps: [
       {
-        title: "Tell us the group",
-        body: "How many people, what standard you need and whether it has to be certified.",
+        title: "Pick a date, or bring us in",
+        body: "Book a seat on a public course online, or tell us your numbers and we run it at your place.",
       },
       {
-        title: "We bring the training to you",
-        body: "An instructor, manikins, AED trainers and paperwork arrive at your premises.",
+        title: "Practise it hands on",
+        body: "Manikins, AED trainers and practical scenarios, led by someone who has handled the real thing.",
       },
       {
-        title: "Certificates issued",
-        body: "PHECC and CPD certificates come back to you, with renewal dates flagged.",
+        title: "Leave certified",
+        body: "A PHECC, CPD or Pulse 8 certificate when you pass. Most stay valid for two years.",
       },
     ],
   },

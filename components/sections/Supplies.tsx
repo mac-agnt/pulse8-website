@@ -1,4 +1,5 @@
-import { ArrowUpRight } from "@phosphor-icons/react/dist/ssr";
+import Link from "next/link";
+import { ArrowRight } from "@phosphor-icons/react/dist/ssr";
 import { Reveal, RevealGroup, RevealItem } from "@/components/ui/Reveal";
 import { supplies } from "@/lib/data";
 
@@ -14,6 +15,17 @@ export function Supplies() {
             Training a team is half of it. Pulse 8 also supplies and restocks what the
             training assumes is on the wall.
           </p>
+          <Link
+            href="/shop"
+            className="group mt-8 inline-flex items-center gap-2 text-[0.9375rem] font-medium text-ink"
+          >
+            Visit the shop
+            <ArrowRight
+              size={16}
+              weight="bold"
+              className="text-accent transition-transform duration-200 ease-out group-hover:translate-x-0.5 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0"
+            />
+          </Link>
         </Reveal>
 
         <RevealGroup className="lg:col-span-7">
@@ -21,7 +33,7 @@ export function Supplies() {
             {supplies.map((item) => (
               <RevealItem key={item.name}>
                 <li>
-                  <a
+                  <Link
                     href={item.href}
                     className="group flex items-center justify-between gap-6 border-b border-border py-6 transition-colors duration-200 hover:bg-tint/60"
                   >
@@ -31,12 +43,12 @@ export function Supplies() {
                         {item.description}
                       </span>
                     </span>
-                    <ArrowUpRight
+                    <ArrowRight
                       size={22}
                       weight="bold"
                       className="shrink-0 text-ink-faint transition-colors duration-200 group-hover:text-accent"
                     />
-                  </a>
+                  </Link>
                 </li>
               </RevealItem>
             ))}

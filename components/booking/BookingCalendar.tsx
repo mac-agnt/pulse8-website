@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { format } from "date-fns";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft,
   CheckCircle,
@@ -25,6 +26,7 @@ import {
   type Session,
 } from "@/lib/schedule";
 import type { Delivery } from "@/lib/data";
+import { ease } from "@/lib/motion";
 
 type DeliveryFilter = "All" | Delivery;
 
@@ -56,25 +58,32 @@ function SessionRow({
   onBook: (session: Session) => void;
 }) {
   const full = session.seatsLeft === 0;
+  const low = !full && session.seatsLeft <= 3;
+  const colour = colourFor(session.courseSlug);
 
   return (
-    <div className="rounded-[var(--radius-card)] border border-border-soft bg-bg p-4">
+    <div className="relative overflow-hidden rounded-[var(--radius-card)] border border-border-soft bg-surface p-4 pl-5">
+      <span
+        aria-hidden="true"
+        style={{ backgroundColor: colour }}
+        className="absolute inset-y-0 left-0 w-1"
+      />
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="figure text-[0.9375rem] font-semibold text-ink">
+          <p className="figure text-[0.8125rem] font-medium text-ink-muted">
             {session.start} to {session.end}
-            {session.days > 1 ? (
-              <span className="ml-2 font-normal text-ink-muted">{session.days} days</span>
-            ) : null}
+            {session.days > 1 ? `, ${session.days} days` : ""}
           </p>
-          <h3 className="mt-1 font-medium text-ink">{session.title}</h3>
+          <h3 className="mt-1 text-[1.0625rem] leading-snug font-semibold text-ink">
+            {session.title}
+          </h3>
         </div>
 
         <div className="shrink-0 text-right">
-          <p className="figure text-lg font-semibold text-ink">
+          <p className="figure text-lg leading-none font-semibold text-ink">
             {formatPrice(session.price)}
           </p>
-          <p className="text-[0.75rem] whitespace-nowrap text-ink-faint">per person</p>
+          <p className="mt-1 text-[0.75rem] whitespace-nowrap text-ink-faint">per person</p>
         </div>
       </div>
 
@@ -83,26 +92,27 @@ function SessionRow({
           <MapPin size={14} weight="bold" className="text-ink-faint" />
           {session.venue}
         </span>
-        <span className="inline-flex items-center gap-1.5">
-          <Users size={14} weight="bold" className="text-ink-faint" />
+        <span
+          className={cn(
+            "inline-flex items-center gap-1.5",
+            low && "font-medium text-accent-strong",
+          )}
+        >
+          <Users size={14} weight="bold" className={low ? "" : "text-ink-faint"} />
           {seatLabel(session)}
         </span>
-        <span className="rounded-full border border-border px-2.5 py-0.5 text-[0.75rem] font-medium">
+        <span className="rounded-full bg-tint px-2.5 py-0.5 text-[0.75rem] font-medium text-ink">
           {session.delivery}
         </span>
       </div>
 
       <div className="mt-4">
         {full ? (
-          <Button href="/#contact" variant="secondary" className="w-full sm:w-auto">
+          <Button href="/#contact" variant="secondary" className="w-full">
             Join the waiting list
           </Button>
         ) : (
-          <SubmitButton
-            type="button"
-            onClick={() => onBook(session)}
-            className="w-full sm:w-auto"
-          >
+          <SubmitButton type="button" onClick={() => onBook(session)} className="w-full">
             Book for {formatPrice(session.price)}
           </SubmitButton>
         )}
@@ -337,113 +347,165 @@ export function BookingCalendar({
     );
   }
 
+  const headingDate = panelDate ? fromIso(panelDate) : null;
+
   return (
-    <div>
-      {/*
-        Colour on the grid encodes course family, so it needs naming somewhere.
-        Every chip also carries its course name, so the colour is a second cue
-        rather than the only one.
-      */}
-      <ul className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-2">
-        {families.map((family) => (
-          <li key={family.key} className="flex items-center gap-2 text-[0.8125rem] text-ink-muted">
-            <span
-              aria-hidden="true"
-              style={{ backgroundColor: `var(${family.token})` }}
-              className="size-2.5 rounded-full"
-            />
-            {family.label}
-          </li>
-        ))}
-      </ul>
+    <div className="overflow-hidden rounded-[1.75rem] border border-border bg-surface shadow-[0_30px_80px_-30px_rgb(15_23_42/0.25)]">
+      <div className="grid xl:grid-cols-[minmax(0,1fr)_25rem]">
+        <div className="p-5 md:p-8">
+          <FullScreenCalendar
+            data={calendarData}
+            selectedDay={headingDate ?? undefined}
+            onSelectDay={(day) => setSelectedDate(format(day, "yyyy-MM-dd"))}
+            minDate={fromIso(today)}
+            headerSlot={
+              <div className="flex flex-col gap-3 md:flex-row md:items-center">
+                <label>
+                  <span className="sr-only">Course</span>
+                  <select
+                    value={courseSlug}
+                    onChange={(event) => resetFilters(() => setCourseSlug(event.target.value))}
+                    className={cn(control, "h-10 w-full rounded-full px-4 md:w-[15rem]")}
+                  >
+                    <option value="All">All courses</option>
+                    {courseOptions.map(([slug, title]) => (
+                      <option key={slug} value={slug}>
+                        {title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
 
-      <FullScreenCalendar
-        data={calendarData}
-        selectedDay={panelDate ? fromIso(panelDate) : undefined}
-        onSelectDay={(day) => setSelectedDate(format(day, "yyyy-MM-dd"))}
-        minDate={fromIso(today)}
-        headerSlot={
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <label className="flex items-center gap-2">
-              <span className="sr-only">Course</span>
-              <select
-                value={courseSlug}
-                onChange={(event) => resetFilters(() => setCourseSlug(event.target.value))}
-                className={cn(control, "w-full sm:w-[16rem]")}
+                <div
+                  role="group"
+                  aria-label="Format"
+                  className="inline-flex rounded-full bg-tint p-1"
+                >
+                  {deliveryOptions.map((option) => {
+                    const active = option === delivery;
+                    return (
+                      <button
+                        key={option}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => resetFilters(() => setDelivery(option))}
+                        className={cn(
+                          "relative h-8 rounded-full px-3.5 text-[0.8125rem] font-medium transition-colors duration-200",
+                          active ? "text-ink" : "text-ink-muted hover:text-ink",
+                        )}
+                      >
+                        {active ? (
+                          <motion.span
+                            layoutId="format-pill"
+                            aria-hidden="true"
+                            transition={{ duration: 0.3, ease }}
+                            className="absolute inset-0 rounded-full bg-surface shadow-[0_1px_2px_rgb(15_23_42/0.12)]"
+                          />
+                        ) : null}
+                        <span className="relative">{option === "All" ? "Any" : option}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            }
+          />
+
+          {/*
+            Colour on the grid encodes course family, so it needs naming
+            somewhere. Every chip also carries its course name, so colour is a
+            second cue rather than the only one.
+          */}
+          <ul className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2">
+            {families.map((family) => (
+              <li
+                key={family.key}
+                className="flex items-center gap-2 text-[0.8125rem] text-ink-muted"
               >
-                <option value="All">All courses</option>
-                {courseOptions.map(([slug, title]) => (
-                  <option key={slug} value={slug}>
-                    {title}
-                  </option>
-                ))}
-              </select>
-            </label>
+                <span
+                  aria-hidden="true"
+                  style={{ backgroundColor: `var(${family.token})` }}
+                  className="size-2.5 rounded-full"
+                />
+                {family.label}
+              </li>
+            ))}
+          </ul>
+        </div>
 
-            <label className="flex items-center gap-2">
-              <span className="sr-only">Format</span>
-              <select
-                value={delivery}
-                onChange={(event) =>
-                  resetFilters(() => setDelivery(event.target.value as DeliveryFilter))
-                }
-                className={cn(control, "w-full sm:w-[9.5rem]")}
+        <aside
+          ref={panelRef}
+          aria-label="Courses on the selected date"
+          className="scroll-mt-24 border-t border-border-soft bg-bg p-5 md:p-8 xl:border-t-0 xl:border-l"
+        >
+          <div className="xl:sticky xl:top-28">
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={panelDate ?? "none"}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.22, ease }}
               >
-                {deliveryOptions.map((option) => (
-                  <option key={option} value={option}>
-                    {option === "All" ? "Any format" : option}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        }
-      />
+                {headingDate ? (
+                  <div className="flex items-end justify-between gap-4 border-b border-border-soft pb-5">
+                    <div>
+                      <p className="text-[0.8125rem] font-medium tracking-[0.1em] text-accent uppercase">
+                        {panelDate === today ? "Today" : format(headingDate, "EEEE")}
+                      </p>
+                      <p className="figure mt-1 text-[2.5rem] leading-none font-semibold tracking-[-0.04em] text-ink">
+                        {format(headingDate, "d MMMM")}
+                      </p>
+                    </div>
+                    <p className="figure pb-1 text-[0.875rem] text-ink-muted">
+                      {panelSessions.length}{" "}
+                      {panelSessions.length === 1 ? "course" : "courses"}
+                    </p>
+                  </div>
+                ) : null}
 
-      <div ref={panelRef} className="scroll-mt-24 pt-8 md:pt-10">
-        {panelDate && panelSessions.length > 0 ? (
-          <div>
-            <div className="flex flex-wrap items-baseline justify-between gap-3">
-              <h2 className="text-xl font-semibold text-ink">
-                {panelDate === today ? "Today" : formatDayLong(panelDate)}
-              </h2>
-              <p className="figure text-[0.875rem] text-ink-muted">
-                {panelSessions.length}{" "}
-                {panelSessions.length === 1 ? "course" : "courses"} on this date
-              </p>
-            </div>
+                {panelDate && panelSessions.length > 0 ? (
+                  <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-1">
+                    {panelSessions.map((session, index) => (
+                      <motion.div
+                        key={session.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3, ease, delay: Math.min(index, 4) * 0.05 }}
+                      >
+                        <SessionRow session={session} onBook={startBooking} />
+                      </motion.div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-6">
+                    <Clock size={26} weight="bold" className="text-ink-faint" />
+                    <h2 className="mt-4 text-lg font-semibold text-ink">
+                      Nothing on {panelDate ? formatDayLong(panelDate) : "this date"}
+                    </h2>
+                    <p className="mt-2 max-w-[36ch] text-ink-muted">
+                      Widen the filters, or jump to the next date with courses on it.
+                    </p>
+                    {nextDateWithCourses ? (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedDate(nextDateWithCourses)}
+                        className="mt-5 text-[0.9375rem] font-medium text-ink underline underline-offset-4"
+                      >
+                        Go to {formatDayLong(nextDateWithCourses)}
+                      </button>
+                    ) : null}
+                  </div>
+                )}
+              </motion.div>
+            </AnimatePresence>
 
-            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {panelSessions.map((session) => (
-                <SessionRow key={session.id} session={session} onBook={startBooking} />
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div className={cn(card, "p-8 md:p-10")}>
-            <Clock size={26} weight="bold" className="text-ink-faint" />
-            <h2 className="mt-4 text-lg font-semibold text-ink">
-              Nothing on {panelDate ? formatDayLong(panelDate) : "this date"}
-            </h2>
-            <p className="mt-2 max-w-[40ch] text-ink-muted">
-              Widen the filters, or jump to the next date with courses on it.
+            <p className="mt-8 border-t border-border-soft pt-4 text-[0.75rem] text-ink-faint">
+              Sample schedule and prices for this build. Live dates come from the Pulse 8
+              booking system.
             </p>
-            {nextDateWithCourses ? (
-              <button
-                type="button"
-                onClick={() => setSelectedDate(nextDateWithCourses)}
-                className="mt-5 text-[0.9375rem] font-medium text-ink underline underline-offset-4"
-              >
-                Go to {formatDayLong(nextDateWithCourses)}
-              </button>
-            ) : null}
           </div>
-        )}
-
-        <p className="mt-8 border-t border-border-soft pt-4 text-[0.8125rem] text-ink-faint">
-          Sample schedule and prices for this build. Live dates come from the Pulse 8
-          booking system.
-        </p>
+        </aside>
       </div>
     </div>
   );

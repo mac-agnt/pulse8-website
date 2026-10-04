@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { ArrowRight, CalendarBlank } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/Button";
+import { HighlightHeadline } from "@/components/ui/HighlightHeadline";
 import { Reveal } from "@/components/ui/Reveal";
 import { accreditations, type Fact } from "@/lib/data";
 import { defaultContent } from "@/lib/content";
@@ -10,37 +11,13 @@ import { defaultContent } from "@/lib/content";
  *
  * Paper on one side carrying the claim, the accreditation marks under it, and
  * a photograph on the other holding the three figures that back the claim up.
- * The headline is two tone: words wrapped in *asterisks* are promoted out of
- * the muted base into full ink, which is how the sentence gets its emphasis
- * without hard coding a span per phrase.
+ * The headline starts grey and the words wrapped in *asterisks* fill to full
+ * ink as it scrolls into view (see HighlightHeadline).
  */
 const PANEL_IMAGE = "/site/hero.webp";
 
 const HEADLINE =
   "*Pulse 8* puts *certified first aid*, fire safety and manual handling training *into your workplace*, on your dates, anywhere in *Ireland*.";
-
-function Headline({ text }: { text: string }) {
-  const parts = text.split(/\*([^*]+)\*/g);
-  const emphasised = parts.length > 1;
-
-  return (
-    <h2
-      className={`text-[1.875rem] leading-[1.16] font-semibold tracking-[-0.03em] sm:text-[2.25rem] lg:text-[2.5rem] ${
-        emphasised ? "text-ink-faint" : "text-ink"
-      }`}
-    >
-      {parts.map((part, index) =>
-        index % 2 === 1 ? (
-          <span key={index} className="text-ink">
-            {part}
-          </span>
-        ) : (
-          part
-        ),
-      )}
-    </h2>
-  );
-}
 
 export function Overview({ facts = defaultContent.facts }: { facts?: Fact[] }) {
   // Training since, courses, rating. The PHECC mark sits in the row underneath.
@@ -55,7 +32,7 @@ export function Overview({ facts = defaultContent.facts }: { facts?: Fact[] }) {
       <div className="order-2 flex items-center px-5 py-16 md:px-10 md:py-20 lg:order-1 lg:py-24 lg:pl-16 xl:pl-20">
         <div className="w-full max-w-[36rem]">
           <Reveal>
-            <Headline text={HEADLINE} />
+            <HighlightHeadline text={HEADLINE} />
             <hr className="mt-9 border-border" />
             <p className="mt-8 max-w-[46ch] text-lg leading-relaxed text-ink-muted">
               PHECC Approved Training Institute since 2010. Dates are published up front, so

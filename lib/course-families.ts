@@ -31,6 +31,7 @@ export const families: Family[] = [
 
 const BY_SLUG: Record<string, FamilyKey> = {
   "first-aid-response-phecc": "response",
+  "first-aid-response-blended": "response",
   "first-aid-response-recertification": "response",
   "cardiac-first-response": "response",
   "basic-first-aid": "response",
