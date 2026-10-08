@@ -11,9 +11,11 @@ import {
   GraduationCap,
   HandGrabbing,
   Heartbeat,
+  Info,
   Laptop,
   Lightning,
   ListChecks,
+  Scroll,
   Signpost,
   SignIn,
 } from "@phosphor-icons/react";
@@ -116,7 +118,30 @@ export const navItems: NavItem[] = [
       },
     ],
   },
-  { id: 3, label: "About", href: "/about" },
+  {
+    id: 3,
+    label: "About",
+    href: "/about",
+    subMenus: [
+      {
+        title: "Pulse 8",
+        items: [
+          {
+            label: "About Pulse 8",
+            description: "Instructors, PHECC approval, how we work",
+            href: "/about",
+            icon: Info,
+          },
+          {
+            label: "Policies",
+            description: "Learner policies, privacy and cancellations",
+            href: "/policies",
+            icon: Scroll,
+          },
+        ],
+      },
+    ],
+  },
   { id: 4, label: "FAQs", href: "/#faq" },
   { id: 5, label: "Contact", href: "/contact" },
 ];
