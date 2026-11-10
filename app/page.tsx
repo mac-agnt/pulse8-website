@@ -11,14 +11,20 @@ import { Supplies } from "@/components/sections/Supplies";
 import { Contact } from "@/components/sections/Contact";
 import { Faq } from "@/components/sections/Faq";
 import { Footer } from "@/components/sections/Footer";
-import { readContent } from "@/lib/content.server";
+import { readPublicContent } from "@/lib/content.server";
 
 // The announcement bar reads the live schedule, and the copy comes from a file
 // the dashboard writes, so this cannot be baked in.
 export const dynamic = "force-dynamic";
 
+/**
+ * Order, per the 8 November feedback: hero with its accreditation group, then
+ * the training introduction and course discovery, then supporting sections,
+ * one "Trusted by" logo group, and the enquiry form last before the footer.
+ */
 export default async function HomePage() {
-  const content = await readContent();
+  const content = await readPublicContent();
+  const courseOptions = content.courses.map(({ slug, title }) => ({ slug, title }));
 
   return (
     <>
@@ -26,15 +32,15 @@ export default async function HomePage() {
       <Header overlay />
       <main>
         <Hero copy={content.hero} />
-        <Accreditation />
         <Overview facts={content.facts} />
-        <About process={content.process} />
         <Courses courses={content.courses} />
+        <About process={content.process} />
         <Sectors />
         <Testimonials />
         <Supplies />
-        <Contact />
         <Faq />
+        <Accreditation />
+        <Contact courses={courseOptions} />
       </main>
       <Footer />
     </>

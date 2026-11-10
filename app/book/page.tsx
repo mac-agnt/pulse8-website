@@ -3,20 +3,14 @@ import { AnnouncementBar } from "@/components/sections/AnnouncementBar";
 import { Header } from "@/components/sections/Header";
 import { Footer } from "@/components/sections/Footer";
 import { BookingCalendar } from "@/components/booking/BookingCalendar";
-import {
-  buildSchedule,
-  expandExtraSessions,
-  formatDayShort,
-  formatPrice,
-  isoDate,
-  mergeSessions,
-} from "@/lib/schedule";
-import { readContent } from "@/lib/content.server";
+import { readPublicContent } from "@/lib/content.server";
+import { fixturesEnabled, getPublicSessions } from "@/lib/sessions.server";
+import { dublinNow, formatDayShort } from "@/lib/schedule";
 
 export const metadata: Metadata = {
-  title: "Book a course | Pulse 8",
+  title: "Upcoming course dates | Pulse 8",
   description:
-    "Upcoming first aid, fire safety and manual handling dates with prices on every seat. Filter by course and format, pick a time and book it.",
+    "Find an upcoming first aid, fire safety or manual handling course by date, course or delivery format.",
 };
 
 // Anchored to the current date and to a file the dashboard writes, so it
@@ -26,24 +20,18 @@ export const dynamic = "force-dynamic";
 export default async function BookPage({
   searchParams,
 }: {
-  searchParams: Promise<{ course?: string }>;
+  searchParams: Promise<{ course?: string; format?: string; session?: string; cancelled?: string }>;
 }) {
-  const { course } = await searchParams;
-  const now = new Date();
-  const content = await readContent();
-  const sessions = mergeSessions(
-    buildSchedule(now),
-    expandExtraSessions(content.extraSessions, content.courses),
-  );
+  const { course, format, session, cancelled } = await searchParams;
+  const [sessions, content] = await Promise.all([getPublicSessions(), readPublicContent()]);
+  const courses = content.courses
+    .map(({ slug, title }) => ({ slug, title }))
+    .sort((a, b) => a.title.localeCompare(b.title));
 
-  const todayIso = isoDate(now);
-  const upcoming = sessions.filter((session) => session.date >= todayIso);
-  const next = upcoming.find((session) => session.seatsLeft > 0);
-  const lowest = upcoming.length ? Math.min(...upcoming.map((session) => session.price)) : null;
+  const next = sessions.find((item) => item.seatsLeft > 0);
   const stats = [
     next ? { label: "Next date", value: formatDayShort(next.date) } : null,
-    { label: "Dates open", value: String(upcoming.length) },
-    lowest !== null ? { label: "Prices from", value: formatPrice(lowest) } : null,
+    { label: "Dates open", value: String(sessions.length) },
   ].filter((item): item is { label: string; value: string } => item !== null);
 
   return (
@@ -55,11 +43,10 @@ export default async function BookPage({
           <div className="shell grid gap-10 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
             <div>
               <h1 className="max-w-[16ch] text-[2.5rem] leading-[1.02] font-semibold tracking-[-0.035em] text-white sm:text-[3.25rem] lg:text-[4rem]">
-                Pick a date that suits
+                Upcoming course dates
               </h1>
               <p className="mt-5 max-w-[52ch] text-lg leading-relaxed text-on-navy-muted">
-                Everything running over the next four months, with the price on every
-                date. Filter to one course, pick a day, and book your place.
+                Find an upcoming course by date, course or delivery format.
               </p>
             </div>
 
@@ -82,8 +69,13 @@ export default async function BookPage({
         <div className="relative z-10 mx-auto -mt-20 w-full max-w-[1600px] px-3 md:-mt-28 md:px-8">
           <BookingCalendar
             sessions={sessions}
-            today={todayIso}
+            courses={courses}
+            today={dublinNow().date}
             initialCourse={course}
+            initialFormat={format}
+            initialSession={session}
+            cancelled={cancelled === "1"}
+            sampleMode={fixturesEnabled()}
           />
         </div>
       </main>

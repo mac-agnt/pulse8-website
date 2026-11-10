@@ -5,7 +5,8 @@ import { RevealGroup, RevealItem } from "@/components/ui/Reveal";
 import { clients } from "@/lib/data";
 
 /**
- * Who Pulse 8 has trained, directly under the Overview.
+ * Who Pulse 8 has trained. The one customer-logo group on the home page,
+ * placed after the supporting sections and before the enquiry form.
  *
  * One intro card that spans the full height on the left, the client marks as a
  * grid of equal cards beside it. The logos are PNGs with the white knocked out,

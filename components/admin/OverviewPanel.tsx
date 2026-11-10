@@ -18,7 +18,9 @@ export function OverviewPanel({
 }) {
   const today = isoDate(new Date());
   const upcoming = content.extraSessions.filter((session) => session.date >= today);
-  const prices = content.courses.map((course) => course.price);
+  const prices = content.courses
+    .map((course) => course.price)
+    .filter((price): price is number => typeof price === "number");
   const average = prices.length
     ? Math.round(prices.reduce((total, price) => total + price, 0) / prices.length)
     : 0;
@@ -96,7 +98,9 @@ export function OverviewPanel({
               <li key={course.slug} className="flex items-baseline justify-between gap-4 py-3 first:pt-0 last:pb-0">
                 <span className="text-[0.875rem] font-medium text-ink">{course.title}</span>
                 <span className="figure text-[0.8125rem] text-ink-muted">
-                  {course.duration} · €{course.price}
+                  {[course.duration, course.price !== undefined ? `€${course.price}` : null]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </span>
               </li>
             ))}

@@ -1,10 +1,11 @@
 import Image from "next/image";
-import { EnvelopeSimple, Phone } from "@phosphor-icons/react/dist/ssr";
+import { EnvelopeSimple, Phone, WhatsappLogo } from "@phosphor-icons/react/dist/ssr";
 import { Reveal } from "@/components/ui/Reveal";
-import { QuoteForm } from "@/components/sections/QuoteForm";
+import { QuoteForm, type CourseOption } from "@/components/sections/QuoteForm";
 import { contact } from "@/lib/data";
+import { whatsappUrl } from "@/lib/site-config";
 
-export function Contact() {
+export function Contact({ courses }: { courses: CourseOption[] }) {
   return (
     <section id="contact" className="relative isolate overflow-hidden bg-navy-deep">
       <Image
@@ -28,8 +29,8 @@ export function Contact() {
             Tell us what you need trained
           </h2>
           <p className="mt-5 max-w-[42ch] text-lg text-on-navy-muted">
-            Scheduled courses are priced and bookable on the dates page. Use this for
-            on-site training, where the group size sets the shape of the day.
+            Tell us who needs training and where. We&rsquo;ll help you find the right
+            course or arrange training for your team.
           </p>
 
           <div className="mt-10 flex flex-col gap-4">
@@ -47,11 +48,23 @@ export function Contact() {
               <Phone size={20} weight="bold" className="text-on-navy-muted" />
               <span className="figure">{contact.phone}</span>
             </a>
+            {whatsappUrl ? (
+              <a
+                href={whatsappUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-3 text-lg text-on-navy"
+              >
+                <WhatsappLogo size={20} weight="bold" className="text-on-navy-muted" />
+                Message us on WhatsApp
+                <span className="sr-only">(opens WhatsApp)</span>
+              </a>
+            ) : null}
           </div>
         </Reveal>
 
         <Reveal delay={0.08} className="lg:col-span-7">
-          <QuoteForm />
+          <QuoteForm courses={courses} idPrefix="home-enquiry" />
         </Reveal>
       </div>
     </section>

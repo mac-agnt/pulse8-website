@@ -1,6 +1,4 @@
 import Image from "next/image";
-import { ArrowRight, CalendarBlank } from "@phosphor-icons/react/dist/ssr";
-import { Button } from "@/components/ui/Button";
 import { HighlightHeadline } from "@/components/ui/HighlightHeadline";
 import { Reveal } from "@/components/ui/Reveal";
 import { accreditations, type Fact } from "@/lib/data";
@@ -12,7 +10,8 @@ import { defaultContent } from "@/lib/content";
  * Paper on one side carrying the claim, the accreditation marks under it, and
  * a photograph on the other holding the three figures that back the claim up.
  * The headline starts grey and the words wrapped in *asterisks* fill to full
- * ink as it scrolls into view (see HighlightHeadline).
+ * ink as it scrolls into view (see HighlightHeadline). The hero carries the
+ * booking actions, so this panel does not repeat them.
  */
 const PANEL_IMAGE = "/site/hero.webp";
 
@@ -35,29 +34,9 @@ export function Overview({ facts = defaultContent.facts }: { facts?: Fact[] }) {
             <HighlightHeadline text={HEADLINE} />
             <hr className="mt-9 border-border" />
             <p className="mt-8 max-w-[46ch] text-lg leading-relaxed text-ink-muted">
-              PHECC Approved Training Institute since 2010. Dates are published up front, so
-              you can book a place without making a phone call.
+              PHECC Approved Training Institute since 2010. Join a scheduled course, or ask
+              us to train your team at your own premises.
             </p>
-          </Reveal>
-
-          <Reveal delay={0.1}>
-            <div className="mt-9 flex flex-wrap items-center gap-x-7 gap-y-4">
-              <Button href="/book" size="lg">
-                <CalendarBlank size={17} weight="bold" />
-                Book a course
-              </Button>
-              <a
-                href="#courses"
-                className="group inline-flex items-center gap-2 text-[0.9375rem] font-medium text-ink"
-              >
-                Browse courses
-                <ArrowRight
-                  size={16}
-                  weight="bold"
-                  className="text-accent transition-transform duration-200 ease-out group-hover:translate-x-0.5 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0"
-                />
-              </a>
-            </div>
           </Reveal>
 
           <Reveal delay={0.18}>

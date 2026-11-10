@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { courses } from "@/lib/data";
+import { courses, isPublished } from "@/lib/data";
 import { categories, products } from "@/lib/shop";
 import { policyPages } from "@/lib/policies";
 
@@ -14,7 +14,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
   return [
     ...pages.map((path) => ({ url: `${BASE}${path}` })),
-    ...courses.map((course) => ({ url: `${BASE}/courses/${course.slug}` })),
+    ...courses.filter(isPublished).map((course) => ({ url: `${BASE}/courses/${course.slug}` })),
     ...categories.map((category) => ({ url: `${BASE}/shop/${category.slug}` })),
     ...products.map((product) => ({ url: `${BASE}/product/${product.slug}` })),
     ...policyPages.map((page) => ({ url: `${BASE}/policies/${page.slug}` })),

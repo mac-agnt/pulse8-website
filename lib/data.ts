@@ -5,36 +5,76 @@
  * list and testimonials are all taken from the live pulse8.ie pages so nothing
  * here is invented. Four durations on the live site look like copy-paste
  * duplicates of the 18-hour First Aid Response entry and are marked
- * `unverified` below — confirm with Pulse 8 before this goes to production.
+ * `unverified` below. Confirm with Pulse 8 before this goes to production.
  *
- * PRICES ARE PLACEHOLDER. Pulse 8 publishes no per-seat prices, so every
- * `price` below is a plausible Irish market rate, not a quoted one. Confirm the
- * full list with Pulse 8 before launch.
+ * Course prices are not in this file. Public pages do not show them, and this
+ * module is imported by client components, so anything here ships to the
+ * browser. Rates live server-side in lib/course-prices.server.ts and in the
+ * dashboard's content file, and only the booking API reads them.
  */
 
 export type Delivery = "Classroom" | "Online" | "Blended";
+
+/** Catalogue groupings. Separate from delivery format, which has its own filter. */
+export type CourseCategory = "first-aid" | "workplace" | "fire" | "medication";
+
+export const courseCategories: Record<CourseCategory, string> = {
+  "first-aid": "First aid and resuscitation",
+  workplace: "Workplace health and safety",
+  fire: "Fire safety and evacuation",
+  medication: "Medication",
+};
 
 export type Course = {
   slug: string;
   title: string;
   blurb: string;
-  duration: string;
-  /** euro, per person. PLACEHOLDER, see the note at the top of this file */
-  price: number;
+  /** omitted until Pulse 8 confirms it, and then not shown */
+  duration?: string;
+  /**
+   * Euro, per person. SERVER AND ADMIN ONLY: never pass this to a public
+   * component. Public pages go through `toPublicCourse`.
+   */
+  price?: number;
   /** true when the live-site duration looks wrong and needs client confirmation */
   unverifiedDuration?: boolean;
   maxParticipants?: number;
   delivery: Delivery;
   certificate?: string;
-  image: string;
+  /** omitted when there is no approved or licensed photograph; a neutral panel stands in */
+  image?: string;
   /** shown as the lead credential chip on the card */
   headline?: boolean;
+  /** catalogue grouping, where one has been assigned */
+  category?: CourseCategory;
+  /** draft courses get no route, card, menu entry or enquiry option */
+  status?: "published" | "draft";
+  /**
+   * Accreditation the client has described but which is not yet verified
+   * against the awarding body. Recorded for staff, never rendered as a badge.
+   */
+  clientStatedAccreditation?: string;
+  /** fields still waiting on Pulse 8, listed so the dashboard and handoff can show them */
+  pendingConfirmation?: string[];
 };
+
+/** A course as public pages may see it: no rate. */
+export type PublicCourse = Omit<Course, "price">;
+
+export function toPublicCourse(course: Course): PublicCourse {
+  // Destructured out rather than deleted, so the original stays intact.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { price, ...rest } = course;
+  return rest;
+}
+
+export function isPublished(course: Pick<Course, "status">): boolean {
+  return course.status !== "draft";
+}
 
 export const courses: Course[] = [
   {
     slug: "first-aid-response-phecc",
-    price: 275,
     title: "First Aid Response",
     blurb:
       "The HSA-recognised standard for occupational first aid. Assessment on practical skills and a written paper.",
@@ -47,12 +87,11 @@ export const courses: Course[] = [
   },
   {
     slug: "first-aid-response-blended",
-    price: 275,
     title: "First Aid Response (Blended)",
     blurb:
       "The same PHECC First Aid Response standard, with the theory done online at your own pace and the practical assessed in person.",
     duration: "18 hours",
-    // New course. Duration and price are placeholders until Pulse 8 confirms them.
+    // New course. Duration is a placeholder until Pulse 8 confirms it.
     unverifiedDuration: true,
     maxParticipants: 8,
     delivery: "Blended",
@@ -61,7 +100,6 @@ export const courses: Course[] = [
   },
   {
     slug: "first-aid-response-recertification",
-    price: 195,
     title: "First Aid Response Recertification",
     blurb:
       "Renews an existing FAR certificate through recognition of prior learning. Certificate valid two years.",
@@ -73,7 +111,6 @@ export const courses: Course[] = [
   },
   {
     slug: "cardiac-first-response",
-    price: 95,
     title: "Cardiac First Response",
     blurb:
       "Half day CFR course covering chest compressions, rescue breaths and AED use on adults and children.",
@@ -86,7 +123,6 @@ export const courses: Course[] = [
   },
   {
     slug: "basic-first-aid",
-    price: 85,
     title: "Basic First Aid",
     blurb:
       "Patient assessment, CPR and choking for adults, children and infants, plus the recovery position.",
@@ -98,7 +134,6 @@ export const courses: Course[] = [
   },
   {
     slug: "paediatric-first-aid",
-    price: 110,
     title: "Paediatric First Aid",
     blurb:
       "Child and infant CPR, choking and incident procedures. Built for creches, montessoris and childminders.",
@@ -111,7 +146,6 @@ export const courses: Course[] = [
   },
   {
     slug: "school-first-aid-course",
-    price: 95,
     title: "School First Aid",
     blurb:
       "Written for the injuries that actually happen in schools, from yard falls to allergic reactions.",
@@ -123,7 +157,6 @@ export const courses: Course[] = [
   },
   {
     slug: "sports-first-aid",
-    price: 110,
     title: "Sports First Aid",
     blurb:
       "Pitch-side response for clubs. EMS activation, patient assessment, adult and child CPR, AED and choking.",
@@ -135,7 +168,6 @@ export const courses: Course[] = [
   },
   {
     slug: "cpr-for-family-friends",
-    price: 45,
     title: "CPR for Family and Friends",
     blurb:
       "A short evening session for people who want to be useful at home rather than certified for work.",
@@ -147,7 +179,6 @@ export const courses: Course[] = [
   },
   {
     slug: "emergency-first-aid-at-work-online",
-    price: 45,
     title: "Emergency First Aid at Work",
     blurb:
       "The most common workplace emergencies, covered online with an in-person practical option.",
@@ -157,7 +188,6 @@ export const courses: Course[] = [
   },
   {
     slug: "fire-marshal",
-    price: 95,
     title: "Fire Marshal",
     blurb:
       "Everything a nominated fire marshal needs to carry out the role, including evacuation duties.",
@@ -169,7 +199,6 @@ export const courses: Course[] = [
   },
   {
     slug: "fire-safety-awareness",
-    price: 55,
     title: "Fire Safety Awareness",
     blurb:
       "Two and a half hours on prevention, extinguisher selection and getting a building emptied calmly.",
@@ -181,7 +210,6 @@ export const courses: Course[] = [
   },
   {
     slug: "manual-handling-training",
-    price: 35,
     title: "Manual Handling",
     blurb:
       "Theory delivered through our online portal, with a practical assessment where the role requires it.",
@@ -191,7 +219,6 @@ export const courses: Course[] = [
   },
   {
     slug: "patient-moving-handling-course",
-    price: 185,
     title: "Patient Moving and Handling",
     blurb:
       "How to move patients safely, particularly elderly or incapacitated people, without injuring staff.",
@@ -204,7 +231,6 @@ export const courses: Course[] = [
   },
   {
     slug: "workplace-health-and-safety",
-    price: 245,
     title: "Workplace Health and Safety",
     blurb:
       "Duties, risk assessment and reporting, so responsibility sits with people who understand it.",
@@ -217,7 +243,6 @@ export const courses: Course[] = [
   },
   {
     slug: "vdu-training",
-    price: 120,
     title: "VDU Assessment",
     blurb:
       "For anyone responsible for display screen assessments. Covers the assessment itself and the paperwork.",
@@ -230,7 +255,6 @@ export const courses: Course[] = [
   },
   {
     slug: "safeguarding-children",
-    price: 30,
     title: "Safeguarding Children",
     blurb:
       "Recognising concerns and knowing the reporting route. Required across childcare, schools and clubs.",
@@ -241,7 +265,6 @@ export const courses: Course[] = [
   },
   {
     slug: "equality-diversity-and-discrimination",
-    price: 30,
     title: "Equality, Diversity and Discrimination",
     blurb:
       "What the words mean in practice, and where the legal line sits for an Irish employer.",
@@ -252,7 +275,6 @@ export const courses: Course[] = [
   },
   {
     slug: "level-1-food-safety-manufacturing",
-    price: 30,
     title: "Level 1 Food Safety, Manufacturing",
     blurb:
       "Food handler basics for manufacturing settings. Approved by CPD, IIRSM, Gatehouse Awards and IOSH.",
@@ -260,6 +282,61 @@ export const courses: Course[] = [
     delivery: "Online",
     certificate: "Pulse 8 certificate",
     image: "/courses/food-safety-level-1.webp",
+  },
+  /*
+   * Added from Tom O'Donoghue's feedback of 8 November 2026. Short
+   * descriptions are original drafts, not copied from any other provider.
+   * Format, duration, class size, certification and photography are all
+   * waiting on Pulse 8, so those fields are left out rather than guessed and
+   * every one of these is enquiry-only until dates are published.
+   */
+  {
+    slug: "cfr-epinephrine",
+    title: "CFR / Epinephrine",
+    blurb:
+      "A course that combines Cardiac First Response training with epinephrine training. Contact us for course requirements and upcoming dates.",
+    delivery: "Classroom",
+    category: "first-aid",
+    // Tom described this as PHECC accredited. Not shown until the approved
+    // course title, scope and badge wording are confirmed.
+    clientStatedAccreditation: "PHECC (client-stated, pending verification)",
+    pendingConfirmation: ["delivery", "duration", "class size", "certification", "image"],
+  },
+  {
+    slug: "pmav-training",
+    title: "PMAV Training",
+    blurb:
+      "Training for teams that need to prepare for and respond to aggression and violence at work. Ask us about options for your team.",
+    delivery: "Classroom",
+    category: "workplace",
+    pendingConfirmation: ["delivery", "duration", "class size", "certification", "image"],
+  },
+  {
+    slug: "evacuation-chair-training",
+    title: "Evacuation Chair Training",
+    blurb:
+      "Training for staff responsible for using an evacuation chair as part of their workplace evacuation plan.",
+    delivery: "Classroom",
+    category: "fire",
+    pendingConfirmation: ["delivery", "duration", "class size", "certification", "image"],
+  },
+  {
+    slug: "buccal-midazolam",
+    title: "Buccal Midazolam Training",
+    blurb:
+      "Familiarisation training for staff who may be asked to support someone with a prescribed seizure care plan. Contact us to check whether the course suits your team.",
+    delivery: "Classroom",
+    category: "medication",
+    pendingConfirmation: ["delivery", "duration", "class size", "certification", "image"],
+  },
+  {
+    slug: "epipen",
+    title: "EpiPen Training",
+    blurb:
+      "Training for staff who may need to respond to a severe allergic reaction and are expected to be familiar with an EpiPen auto-injector.",
+    delivery: "Classroom",
+    category: "medication",
+    pendingConfirmation: ["delivery", "duration", "class size", "certification", "image"],
   },
 ];
 
@@ -319,6 +396,7 @@ export type Fact = { value: string; label: string; note: string };
 export const facts: Fact[] = [
   { value: "2010", label: "Training since", note: "Sixteen years in the field" },
   { value: "PHECC", label: "Approved Training Institute", note: "Assessed and audited" },
+  // The value is replaced with the published catalogue count wherever this renders.
   { value: "19", label: "Courses", note: "Classroom, blended and online" },
   { value: "5.0", label: "Google rating", note: "From verified reviews" },
 ];
@@ -489,3 +567,7 @@ export const faqs: Array<{ question: string; answer: string }> = [
       "You can browse our courses online and book a date directly, or get in touch with us for group bookings and tailored training options.",
   },
 ];
+
+/** Landing copy for the Medication view of the catalogue (/courses#medication). */
+export const medicationIntro =
+  "Explore our Buccal Midazolam and EpiPen training. Contact us to discuss which course is suitable for your team.";

@@ -1,7 +1,9 @@
 import Image from "next/image";
 import Link from "next/link";
-import { EnvelopeSimple, MapPin, Phone } from "@phosphor-icons/react/dist/ssr";
+import { EnvelopeSimple, MapPin, Phone, WhatsappLogo } from "@phosphor-icons/react/dist/ssr";
+import { logo } from "@/lib/brand";
 import { contact } from "@/lib/data";
+import { whatsappUrl } from "@/lib/site-config";
 
 /**
  * Two lists without headings: training and the ways in on the left, the
@@ -52,10 +54,10 @@ export function Footer() {
           <div className="col-span-2 lg:col-span-1">
             <Link href="/" aria-label="Pulse 8 home" className="inline-flex">
               <Image
-                src="/brand/pulse8-logo-light.png"
-                alt="Pulse 8"
-                width={277}
-                height={77}
+                src={logo.onDark.src}
+                alt={logo.onDark.alt}
+                width={logo.onDark.width}
+                height={logo.onDark.height}
                 className="h-10 w-auto"
               />
             </Link>
@@ -102,6 +104,20 @@ export function Footer() {
                   <span className="figure">{contact.phone}</span>
                 </a>
               </li>
+              {whatsappUrl ? (
+                <li>
+                  <a
+                    href={whatsappUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`${link} inline-flex items-center gap-3.5`}
+                  >
+                    <WhatsappLogo size={22} className="shrink-0 text-on-navy" />
+                    Message us on WhatsApp
+                    <span className="sr-only">(opens WhatsApp)</span>
+                  </a>
+                </li>
+              ) : null}
               <li className="inline-flex items-center gap-3.5 text-[1rem] text-on-navy-muted">
                 <MapPin size={22} className="shrink-0 text-on-navy" />
                 Dublin, Ireland

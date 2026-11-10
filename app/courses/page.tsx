@@ -4,9 +4,10 @@ import { ArrowUpRight, Clock } from "@phosphor-icons/react/dist/ssr";
 import { PageShell } from "@/components/layout/PageShell";
 import { PageIntro } from "@/components/ui/PageIntro";
 import { Reveal } from "@/components/ui/Reveal";
-import { CourseBrowser } from "@/components/sections/Courses";
+import { CourseBrowser, CourseCard } from "@/components/sections/Courses";
 import { getCourseDetail } from "@/lib/course-details";
-import { readContent } from "@/lib/content.server";
+import { readPublicContent } from "@/lib/content.server";
+import { medicationIntro } from "@/lib/data";
 
 export const metadata: Metadata = {
   title: "Courses | Pulse 8",
@@ -14,11 +15,12 @@ export const metadata: Metadata = {
     "First aid, CPR, fire safety, manual handling and workplace safety courses. Classroom, blended and online, with PHECC and CPD certification.",
 };
 
-// Card copy and prices come from the file the dashboard writes.
+// Card copy comes from the file the dashboard writes.
 export const dynamic = "force-dynamic";
 
 export default async function CoursesPage() {
-  const { courses } = await readContent();
+  const { courses } = await readPublicContent();
+  const medication = courses.filter((course) => course.category === "medication");
 
   // The old site's "E-Learning Courses" page, now a band on this one: every
   // course that can be bought and started on the e-learning portal.
@@ -30,13 +32,39 @@ export default async function CoursesPage() {
   return (
     <PageShell className="pb-0 md:pb-0">
       <PageIntro label="Courses" title="Every course we run">
-        Classroom, blended and fully online. Open a course for the full syllabus, its next
-        dates and price, or ask us to run it at your premises.
+        Explore in-person, blended and online training. Select a course for more details
+        and upcoming dates, or ask us about training at your premises.
       </PageIntro>
 
       <div className="shell">
         <CourseBrowser courses={courses} limit={null} />
       </div>
+
+      {/* Stable anchor for the Medication menu group. Category, not a format filter. */}
+      {medication.length > 0 ? (
+        <section
+          id="medication"
+          aria-labelledby="medication-heading"
+          className="shell mt-20 scroll-mt-[calc(7rem+var(--header-offset))] md:mt-28"
+        >
+          <Reveal>
+            <h2
+              id="medication-heading"
+              className="text-3xl leading-[1.1] font-semibold sm:text-4xl"
+            >
+              Medication
+            </h2>
+            <p className="mt-5 max-w-[58ch] text-lg text-ink-muted">{medicationIntro}</p>
+          </Reveal>
+          <ul className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {medication.map((course) => (
+              <li key={course.slug}>
+                <CourseCard course={course} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {online.length > 0 ? (
         <section
@@ -74,8 +102,12 @@ export default async function CoursesPage() {
                     </Link>
                     <span className="mt-2 inline-flex items-center gap-1.5 text-[0.8125rem] text-ink-faint">
                       <Clock size={14} weight="bold" />
-                      <span className="figure">{course.duration}</span>
-                      <span aria-hidden="true">,</span>
+                      {course.duration ? (
+                        <>
+                          <span className="figure">{course.duration}</span>
+                          <span aria-hidden="true">,</span>
+                        </>
+                      ) : null}
                       <span>{course.delivery.toLowerCase()}</span>
                     </span>
                     <a

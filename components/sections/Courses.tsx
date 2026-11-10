@@ -8,13 +8,13 @@ import {
   ArrowUpRight,
   Certificate,
   Clock,
+  FirstAidKit,
   MonitorPlay,
   UsersThree,
 } from "@phosphor-icons/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/cn";
-import { courses as defaultCourses, deliveryFilters, type Course, type Delivery } from "@/lib/data";
-import { formatPrice } from "@/lib/schedule";
+import { deliveryFilters, type Delivery, type PublicCourse } from "@/lib/data";
 import { duration as dur, ease, viewport } from "@/lib/motion";
 
 const INITIAL_COUNT = 9;
@@ -22,9 +22,9 @@ const INITIAL_COUNT = 9;
 /**
  * Course card, two faces.
  *
- * The front is the photograph dissolved into the card body, the title, the
- * price and a plain "View course" button. Pressing anywhere else on the card
- * turns it over to the detail face (duration, class size, delivery, certificate,
+ * The front is the photograph dissolved into the card body, the title and a
+ * plain "View course" button (no price: public pages do not show rates).
+ * Pressing anywhere else on the card turns it over to the detail face (duration, class size, delivery, certificate,
  * the full blurb) with the same way through to the course page. Both faces sit
  * in one grid cell so the card is as tall as the taller of the two, and the
  * face that is turned away is inert so it can never take focus or a click.
@@ -34,7 +34,19 @@ const INITIAL_COUNT = 9;
  * Pieces of the detail face are lifted off it on Z for depth; the faces
  * therefore must not clip their children. Reduced motion turns instantly.
  */
-export function CourseCard({ course }: { course: Course }) {
+/** Stand-in for a course with no approved photograph yet. */
+export function CourseImageFallback({ className }: { className?: string }) {
+  return (
+    <div
+      aria-hidden="true"
+      className={cn("grid place-items-center bg-tint text-ink-faint", className)}
+    >
+      <FirstAidKit size={40} weight="duotone" />
+    </div>
+  );
+}
+
+export function CourseCard({ course }: { course: PublicCourse }) {
   const [flipped, setFlipped] = useState(false);
 
   // "PHECC" reads as a body, "Certificate of attendance" is already a name, and
@@ -50,7 +62,7 @@ export function CourseCard({ course }: { course: Course }) {
   const stop = (event: SyntheticEvent) => event.stopPropagation();
 
   const details = [
-    { icon: Clock, label: "Duration", value: course.duration },
+    course.duration ? { icon: Clock, label: "Duration", value: course.duration } : null,
     course.maxParticipants
       ? { icon: UsersThree, label: "Class size", value: `Max ${course.maxParticipants}` }
       : null,
@@ -89,20 +101,26 @@ export function CourseCard({ course }: { course: Course }) {
             {/* Photograph, lifted off the card */}
             <div className="relative h-56 shrink-0 [transform-style:preserve-3d] [transform:translateZ(50px)]">
               <div className="absolute inset-0 overflow-hidden rounded-xl bg-tint">
-                <Image
-                  src={course.image}
-                  alt=""
-                  fill
-                  sizes="(min-width: 1024px) 30vw, (min-width: 640px) 45vw, 90vw"
-                  className="object-cover object-center"
-                />
+                {course.image ? (
+                  <Image
+                    src={course.image}
+                    alt=""
+                    fill
+                    sizes="(min-width: 1024px) 30vw, (min-width: 640px) 45vw, 90vw"
+                    className="object-cover object-center"
+                  />
+                ) : (
+                  <CourseImageFallback className="absolute inset-0" />
+                )}
               </div>
 
               <div className="absolute bottom-3 left-3 flex items-center gap-2 [transform:translateZ(40px)]">
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-[0.75rem] font-medium text-ink shadow-sm">
-                  <Clock size={13} weight="bold" className="text-accent" />
-                  <span className="figure">{course.duration}</span>
-                </span>
+                {course.duration ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-[0.75rem] font-medium text-ink shadow-sm">
+                    <Clock size={13} weight="bold" className="text-accent" />
+                    <span className="figure">{course.duration}</span>
+                  </span>
+                ) : null}
                 <span className="inline-flex items-center rounded-full border border-border bg-surface px-3 py-1.5 text-[0.75rem] font-medium text-ink shadow-sm">
                   {course.delivery}
                 </span>
@@ -133,15 +151,7 @@ export function CourseCard({ course }: { course: Course }) {
                 </p>
               </div>
 
-              <div className="mt-auto flex items-center justify-between gap-3 border-t border-border-soft pt-4 [transform:translateZ(40px)]">
-                <div className="flex flex-col">
-                  <span className="figure text-xl leading-none font-semibold text-ink">
-                    {formatPrice(course.price)}
-                  </span>
-                  <span className="mt-1 text-[0.75rem] whitespace-nowrap text-ink-faint">
-                    per person
-                  </span>
-                </div>
+              <div className="mt-auto flex items-center justify-end gap-3 border-t border-border-soft pt-4 [transform:translateZ(40px)]">
                 <Link
                   href={`/courses/${course.slug}`}
                   onClick={stop}
@@ -212,10 +222,10 @@ export function CourseCard({ course }: { course: Course }) {
  * to reveal the rest; the courses page passes `limit={null}` to show all.
  */
 export function CourseBrowser({
-  courses = defaultCourses,
+  courses,
   limit = INITIAL_COUNT,
 }: {
-  courses?: Course[];
+  courses: PublicCourse[];
   limit?: number | null;
 }) {
   const [filter, setFilter] = useState<"All" | Delivery>("All");
@@ -307,7 +317,7 @@ export function CourseBrowser({
   );
 }
 
-export function Courses({ courses = defaultCourses }: { courses?: Course[] }) {
+export function Courses({ courses }: { courses: PublicCourse[] }) {
   return (
     <section id="courses" className="border-t border-border-soft bg-tint/70 py-20 md:py-28">
       <div className="shell">
@@ -315,11 +325,11 @@ export function Courses({ courses = defaultCourses }: { courses?: Course[] }) {
           Courses
         </p>
         <h2 className="mt-4 max-w-[20ch] text-3xl leading-[1.1] font-semibold sm:text-4xl lg:text-[2.75rem]">
-          Nineteen courses, one provider
+          Explore our training courses
         </h2>
         <p className="mt-5 max-w-[58ch] text-lg text-ink-muted">
-          Classroom, blended and fully online, priced per person. Open any course for the
-          full syllabus and its next dates, or ask us to run it at your premises.
+          Browse in-person, blended and online courses. View course details and upcoming
+          dates, or ask us about training at your premises.
         </p>
 
         <CourseBrowser courses={courses} />

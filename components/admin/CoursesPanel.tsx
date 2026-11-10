@@ -111,14 +111,19 @@ export function CoursesPanel({
               )}
             >
               <span className="relative size-9 shrink-0 overflow-hidden rounded-[6px]">
-                <Image src={course.image} alt="" fill sizes="36px" className="object-cover" />
+                {course.image ? (
+                  <Image src={course.image} alt="" fill sizes="36px" className="object-cover" />
+                ) : (
+                  <span className="absolute inset-0 bg-tint" />
+                )}
               </span>
               <span className="min-w-0">
                 <span className="block truncate text-[0.8125rem] font-medium">
                   {course.title}
                 </span>
                 <span className="figure block text-[0.6875rem] text-ink-faint">
-                  {course.delivery} · €{course.price}
+                  {course.delivery} · {course.price !== undefined ? `€${course.price}` : "no price"}
+                  {course.status === "draft" ? " · draft" : ""}
                 </span>
               </span>
             </button>
@@ -180,15 +185,15 @@ export function CoursesPanel({
               <div className="grid gap-5 sm:grid-cols-2">
                 <Field label="Duration" hint="Free text, e.g. 18 hours or 150 minutes">
                   <TextInput
-                    value={active.duration}
+                    value={active.duration ?? ""}
                     onChange={(event) => patch({ duration: event.target.value })}
                   />
                 </Field>
-                <Field label="Price per person" hint="Euro, whole numbers">
+                <Field label="Price per person" hint="Euro. Used for online payment only, never shown on the site">
                   <TextInput
                     type="number"
                     min={0}
-                    value={active.price}
+                    value={active.price ?? ""}
                     onChange={(event) => patch({ price: Number(event.target.value) || 0 })}
                   />
                 </Field>
@@ -230,7 +235,7 @@ export function CoursesPanel({
                 </Field>
                 <Field label="Image path" hint="A file already in /public">
                   <TextInput
-                    value={active.image}
+                    value={active.image ?? ""}
                     onChange={(event) => patch({ image: event.target.value })}
                   />
                 </Field>
@@ -260,13 +265,9 @@ export function CoursesPanel({
           <Card title="Card preview" description="How it reads on the courses grid">
             <div className="max-w-sm overflow-hidden rounded-[var(--radius-card)] bg-navy-deep">
               <div className="relative h-40">
-                <Image
-                  src={active.image}
-                  alt=""
-                  fill
-                  sizes="384px"
-                  className="object-cover"
-                />
+                {active.image ? (
+                  <Image src={active.image} alt="" fill sizes="384px" className="object-cover" />
+                ) : null}
                 <span
                   aria-hidden="true"
                   className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-navy-deep to-transparent"
@@ -280,7 +281,9 @@ export function CoursesPanel({
                   {active.blurb}
                 </p>
                 <p className="figure mt-4 text-[0.8125rem] text-white/55">
-                  {active.duration} · {active.delivery} · €{active.price}
+                  {[active.duration, active.delivery, active.price !== undefined ? `€${active.price}` : null]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </p>
               </div>
             </div>

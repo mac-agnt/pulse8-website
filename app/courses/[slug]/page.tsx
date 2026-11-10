@@ -8,6 +8,7 @@ import {
   ArrowUpRight,
   CalendarBlank,
   Certificate,
+  ChatCircleText,
   Check,
   Clock,
   MapPin,
@@ -15,27 +16,25 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { PageShell } from "@/components/layout/PageShell";
 import { Button } from "@/components/ui/Button";
+import { CourseImageFallback } from "@/components/sections/Courses";
 import { getCourseDetail, type DetailSection } from "@/lib/course-details";
 import { familyFor } from "@/lib/course-families";
-import { readContent } from "@/lib/content.server";
-import type { Course } from "@/lib/content";
-import {
-  buildSchedule,
-  expandExtraSessions,
-  formatDayShort,
-  formatPrice,
-  isoDate,
-  mergeSessions,
-} from "@/lib/schedule";
+import { readPublicContent } from "@/lib/content.server";
+import { getPublicSessions } from "@/lib/sessions.server";
+import { courseCategories, type PublicCourse } from "@/lib/data";
+import { formatDayShort } from "@/lib/schedule";
 import { cn } from "@/lib/cn";
 
-// Prices and card copy come from the file the dashboard writes.
+// Card copy and dates come from the file the dashboard writes.
 export const dynamic = "force-dynamic";
 
 type Props = { params: Promise<{ slug: string }> };
 
-async function findCourse(slug: string): Promise<{ course: Course; all: Course[] } | null> {
-  const { courses } = await readContent();
+/** Published courses only, so a draft has no route. */
+async function findCourse(
+  slug: string,
+): Promise<{ course: PublicCourse; all: PublicCourse[] } | null> {
+  const { courses } = await readPublicContent();
   const course = courses.find((item) => item.slug === slug);
   return course ? { course, all: courses } : null;
 }
@@ -91,10 +90,10 @@ function SectionBlock({ section }: { section: DetailSection }) {
 /**
  * Related course. Deliberately not the flip card from the home page: this one
  * is for reading and acting. A short photograph, the name large, one plain
- * line of facts, the price, and two ways forward, a full-width button to the
- * course and a link straight to its dates.
+ * line of facts, and two ways forward, a full-width button to the course and a
+ * link straight to its dates.
  */
-function RelatedCourse({ course }: { course: Course }) {
+function RelatedCourse({ course }: { course: PublicCourse }) {
   return (
     <article className="flex h-full flex-col overflow-hidden rounded-[var(--radius-card)] border border-border bg-surface">
       <Link
@@ -103,13 +102,17 @@ function RelatedCourse({ course }: { course: Course }) {
         tabIndex={-1}
         aria-hidden="true"
       >
-        <Image
-          src={course.image}
-          alt=""
-          fill
-          sizes="(min-width: 1024px) 30vw, (min-width: 640px) 45vw, 90vw"
-          className="object-cover"
-        />
+        {course.image ? (
+          <Image
+            src={course.image}
+            alt=""
+            fill
+            sizes="(min-width: 1024px) 30vw, (min-width: 640px) 45vw, 90vw"
+            className="object-cover"
+          />
+        ) : (
+          <CourseImageFallback className="absolute inset-0" />
+        )}
       </Link>
 
       <div className="flex flex-1 flex-col p-5">
@@ -119,8 +122,12 @@ function RelatedCourse({ course }: { course: Course }) {
           </Link>
         </h3>
         <p className="mt-2 text-[0.9375rem] font-medium text-ink-muted">
-          <span className="figure">{course.duration}</span>
-          <span aria-hidden="true"> / </span>
+          {course.duration ? (
+            <>
+              <span className="figure">{course.duration}</span>
+              <span aria-hidden="true"> / </span>
+            </>
+          ) : null}
           {course.delivery}
           {course.certificate ? (
             <>
@@ -134,11 +141,7 @@ function RelatedCourse({ course }: { course: Course }) {
         </p>
 
         <div className="mt-auto pt-5">
-          <p className="flex items-baseline gap-2">
-            <span className="figure text-2xl font-semibold text-ink">{formatPrice(course.price)}</span>
-            <span className="text-[0.8125rem] text-ink-faint">per person</span>
-          </p>
-          <Button href={`/courses/${course.slug}`} size="lg" className="mt-3 w-full">
+          <Button href={`/courses/${course.slug}`} size="lg" className="w-full">
             View course
             <ArrowRight size={16} weight="bold" />
           </Button>
@@ -162,6 +165,7 @@ export default async function CoursePage({ params }: Props) {
   const { course, all } = found;
   const detail = getCourseDetail(course.slug);
   const family = familyFor(course.slug);
+  const groupLabel = course.category ? courseCategories[course.category] : family.label;
 
   // Same family first, then anything else, so there are always three.
   const related = [
@@ -169,16 +173,16 @@ export default async function CoursePage({ params }: Props) {
     ...all.filter((c) => c.slug !== course.slug && familyFor(c.slug).key !== family.key),
   ].slice(0, 3);
 
-  // The next few dates for this course, from the same schedule the booking page uses.
-  const now = new Date();
-  const todayIso = isoDate(now);
-  const { extraSessions, courses: allCourses } = await readContent();
-  const upcoming = mergeSessions(buildSchedule(now), expandExtraSessions(extraSessions, allCourses))
-    .filter((session) => session.courseSlug === course.slug && session.date >= todayIso)
+  // The next few dates for this course, from the same source the dates page uses.
+  const upcoming = (await getPublicSessions())
+    .filter((session) => session.courseSlug === course.slug)
     .slice(0, 3);
+  const hasDates = upcoming.length > 0;
+  const datesHref = `/book?course=${course.slug}`;
+  const enquireHref = `/contact?course=${course.slug}`;
 
   const chips = [
-    { icon: Clock, value: course.duration },
+    course.duration ? { icon: Clock, value: course.duration } : null,
     { icon: MapPin, value: course.delivery },
     course.maxParticipants
       ? { icon: UsersThree, value: `Up to ${course.maxParticipants} learners` }
@@ -187,7 +191,7 @@ export default async function CoursePage({ params }: Props) {
   ].filter((chip) => chip !== null);
 
   const facts = [
-    { icon: Clock, label: "Duration", value: course.duration },
+    course.duration ? { icon: Clock, label: "Duration", value: course.duration } : null,
     course.maxParticipants
       ? { icon: UsersThree, label: "Class size", value: `Up to ${course.maxParticipants}` }
       : null,
@@ -217,14 +221,16 @@ export default async function CoursePage({ params }: Props) {
 
       {/* Hero band */}
       <section className="relative isolate overflow-hidden bg-navy-deep pt-[calc(7.5rem+var(--header-offset))] pb-28 text-on-navy md:pt-[calc(9rem+var(--header-offset))] md:pb-40">
-        <Image
-          src={course.image}
-          alt=""
-          fill
-          priority
-          sizes="100vw"
-          className="-z-20 object-cover object-center"
-        />
+        {course.image ? (
+          <Image
+            src={course.image}
+            alt=""
+            fill
+            priority
+            sizes="100vw"
+            className="-z-20 object-cover object-center"
+          />
+        ) : null}
         {/* Navy wash, heavier on the copy side, so the type holds contrast on any photograph. */}
         <div
           aria-hidden="true"
@@ -254,7 +260,7 @@ export default async function CoursePage({ params }: Props) {
                 style={{ backgroundColor: `var(${family.token})` }}
                 className="size-2 rounded-full"
               />
-              {family.label}
+              {groupLabel}
             </p>
 
             <h1 className="mt-5 max-w-[18ch] text-[2.5rem] leading-[1.03] font-semibold tracking-[-0.035em] text-white sm:text-[3.25rem] lg:text-[4rem]">
@@ -277,10 +283,17 @@ export default async function CoursePage({ params }: Props) {
             </ul>
 
             <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
-              <Button href={`/book?course=${course.slug}`} size="lg" className="rounded-full">
-                <CalendarBlank size={17} weight="bold" />
-                See dates
-              </Button>
+              {hasDates ? (
+                <Button href={datesHref} size="lg" className="rounded-full">
+                  <CalendarBlank size={17} weight="bold" />
+                  See dates
+                </Button>
+              ) : (
+                <Button href={enquireHref} size="lg" className="rounded-full">
+                  <ChatCircleText size={17} weight="bold" />
+                  Enquire about this course
+                </Button>
+              )}
               {detail?.buyOnlineUrl ? (
                 <Button
                   href={detail.buyOnlineUrl}
@@ -333,14 +346,7 @@ export default async function CoursePage({ params }: Props) {
           className="lg:sticky lg:top-[calc(6.5rem+var(--header-offset))] lg:col-span-4 lg:self-start"
         >
           <div className="rounded-[1.75rem] border border-border bg-surface p-6 shadow-[0_30px_80px_-40px_rgb(15_23_42/0.3)] md:p-7">
-            <p className="flex items-baseline gap-2">
-              <span className="figure text-[2.5rem] leading-none font-semibold tracking-[-0.04em] text-ink">
-                {formatPrice(course.price)}
-              </span>
-              <span className="text-[0.9375rem] text-ink-muted">per person</span>
-            </p>
-
-            <dl className="mt-6 grid grid-cols-2 gap-2.5 border-t border-border-soft pt-6">
+            <dl className="grid grid-cols-2 gap-2.5">
               {facts.map(({ icon: Icon, label, value }) => (
                 <div key={label} className="rounded-xl bg-tint/70 p-3.5">
                   <dt className="flex items-center gap-1.5 text-[0.75rem] text-ink-muted">
@@ -354,7 +360,7 @@ export default async function CoursePage({ params }: Props) {
               ))}
             </dl>
 
-            {upcoming.length > 0 ? (
+            {hasDates ? (
               <div className="mt-6 border-t border-border-soft pt-6">
                 <h2 className="text-[0.75rem] font-medium tracking-[0.1em] text-ink-faint uppercase">
                   Next dates
@@ -366,7 +372,7 @@ export default async function CoursePage({ params }: Props) {
                     return (
                       <li key={session.id}>
                         <Link
-                          href={`/book?course=${course.slug}`}
+                          href={`/book?course=${course.slug}&session=${encodeURIComponent(session.id)}`}
                           className="group flex items-center justify-between gap-3 rounded-xl border border-border-soft px-3.5 py-3 transition-colors duration-200 hover:border-ink-faint hover:bg-tint/60"
                         >
                           <span>
@@ -375,6 +381,7 @@ export default async function CoursePage({ params }: Props) {
                             </span>
                             <span className="figure block text-[0.8125rem] text-ink-muted">
                               {session.start}
+                              {session.sample ? ", sample date" : ""}
                             </span>
                           </span>
                           <span
@@ -397,11 +404,25 @@ export default async function CoursePage({ params }: Props) {
               </div>
             ) : null}
 
+            {!hasDates ? (
+              <p className="mt-6 border-t border-border-soft pt-6 text-[0.9375rem] leading-relaxed text-ink-muted">
+                No upcoming dates are published for this course yet. Enquire and we&rsquo;ll
+                let you know when it next runs, or arrange it for your team.
+              </p>
+            ) : null}
+
             <div className="mt-6 flex flex-col gap-3">
-              <Button href={`/book?course=${course.slug}`} size="lg" className="w-full rounded-full">
-                <CalendarBlank size={17} weight="bold" />
-                See dates and book
-              </Button>
+              {hasDates ? (
+                <Button href={datesHref} size="lg" className="w-full rounded-full">
+                  <CalendarBlank size={17} weight="bold" />
+                  See dates and book
+                </Button>
+              ) : (
+                <Button href={enquireHref} size="lg" className="w-full rounded-full">
+                  <ChatCircleText size={17} weight="bold" />
+                  Enquire about this course
+                </Button>
+              )}
               {detail?.buyOnlineUrl ? (
                 <Button
                   href={detail.buyOnlineUrl}
@@ -419,7 +440,7 @@ export default async function CoursePage({ params }: Props) {
             </div>
 
             <Link
-              href={`/contact?course=${course.slug}`}
+              href={enquireHref}
               className="group mt-5 inline-flex items-center gap-2 text-[0.9375rem] font-medium text-ink"
             >
               Run it at your premises

@@ -1,18 +1,14 @@
 import Link from "next/link";
 import { ArrowRight } from "@phosphor-icons/react/dist/ssr";
 import { DismissAnnouncement } from "@/components/sections/DismissAnnouncement";
-import {
-  buildSchedule,
-  formatDayShort,
-  formatPrice,
-  isoDate,
-  type Session,
-} from "@/lib/schedule";
+import { dublinNow, formatDayShort, isoDate, type PublicSession } from "@/lib/schedule";
+import { getPublicSessions } from "@/lib/sessions.server";
 
 /**
  * Top announcement bar.
  *
- * It announces a real row out of the schedule rather than fixed copy: the next
+ * It announces a real, published date rather than fixed copy (sample dates
+ * are skipped, and with no published dates the bar does not render): the next
  * date that is still open, preferring a headline course so the bar is selling
  * First Aid Response rather than whichever short online module happens to fall
  * first. Because the schedule is anchored to today, any page rendering this has
@@ -29,9 +25,9 @@ import {
  * different course or a different date is a different announcement and gets to
  * appear again.
  */
-function nextOpenSession(now: Date): Session | undefined {
-  const today = isoDate(now);
-  const upcoming = buildSchedule(now).filter((s) => s.date >= today && s.seatsLeft > 0);
+async function nextOpenSession(now: Date): Promise<PublicSession | undefined> {
+  const today = dublinNow(now).date;
+  const upcoming = (await getPublicSessions(now)).filter((s) => !s.sample && s.seatsLeft > 0);
   if (upcoming.length === 0) return undefined;
 
   // Look a fortnight ahead for a flagship date before falling back to the very
@@ -45,9 +41,19 @@ function addDaysIso(iso: string, days: number): string {
   return isoDate(new Date(new Date(`${iso}T00:00:00Z`).getTime() + days * 86_400_000));
 }
 
-export function AnnouncementBar() {
-  const session = nextOpenSession(new Date());
-  if (!session) return null;
+export async function AnnouncementBar() {
+  const session = await nextOpenSession(new Date());
+  // Nothing published to announce: drop the attribute so the header does not
+  // leave room for a bar that is not there.
+  if (!session) {
+    return (
+      <script
+        dangerouslySetInnerHTML={{
+          __html: 'document.documentElement.removeAttribute("data-announcement");',
+        }}
+      />
+    );
+  }
 
   const seatsLow = session.seatsLeft <= 3;
 
@@ -70,7 +76,7 @@ export function AnnouncementBar() {
         {/* Room on the right so the text never runs under the close button. */}
         <div className="shell flex h-full items-center justify-center gap-3 pr-12 md:pr-16">
         <Link
-          href={`/book?course=${session.courseSlug}`}
+          href={`/book?course=${session.courseSlug}&session=${encodeURIComponent(session.id)}`}
           className="group flex min-w-0 items-center gap-x-2.5 text-[0.8125rem] text-white/85 md:text-[0.875rem]"
         >
           <span className="shrink-0 font-semibold whitespace-nowrap text-white">
@@ -83,7 +89,7 @@ export function AnnouncementBar() {
             {formatDayShort(session.date)}, {session.start}
             <span className="hidden sm:inline">
               {" "}
-              &middot; {session.venue} &middot; {formatPrice(session.price)}
+              &middot; {session.venue}
             </span>
           </span>
           {seatsLow ? (
@@ -92,7 +98,7 @@ export function AnnouncementBar() {
             </span>
           ) : null}
           <span className="ml-1 hidden shrink-0 items-center gap-1 font-medium text-white underline-offset-4 group-hover:underline sm:inline-flex">
-            Book a place
+            {session.action === "book" ? "Book a place" : "View date"}
             <ArrowRight size={13} weight="bold" />
           </span>
         </Link>

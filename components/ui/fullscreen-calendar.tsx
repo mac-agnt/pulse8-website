@@ -31,7 +31,7 @@ export interface CalendarEvent {
   time: string;
   /** ISO datetime, for the <time> element */
   datetime: string;
-  /** short trailing detail. Price, on this build. */
+  /** short trailing detail shown after the time */
   meta?: string;
   /** dims the chip and drops the colour */
   unavailable?: boolean;
@@ -174,7 +174,7 @@ export function FullScreenCalendar({
             </button>
           </div>
 
-          <div className="relative h-9 w-[11rem] overflow-hidden md:w-[13rem]">
+          <div className="relative h-9 w-[11rem] overflow-hidden md:w-[15rem]">
             <AnimatePresence mode="popLayout" initial={false} custom={direction}>
               <motion.h2
                 key={monthLabel}

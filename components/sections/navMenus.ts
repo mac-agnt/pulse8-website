@@ -11,14 +11,15 @@ import {
   GraduationCap,
   HandGrabbing,
   Heartbeat,
-  Info,
   Laptop,
   Lightning,
   ListChecks,
-  Scroll,
+  Pill,
   Signpost,
   SignIn,
+  Syringe,
 } from "@phosphor-icons/react";
+import { joinCourseUrl } from "@/lib/site-config";
 
 /**
  * Menus for the desktop navigation. Shop entries mirror the categories in
@@ -29,6 +30,8 @@ export type NavItem = {
   id: number;
   label: string;
   href: string;
+  /** "outlined" draws the item as a secondary action (Shop) */
+  variant?: "outlined";
   subMenus?: {
     title: string;
     items: {
@@ -52,7 +55,7 @@ export const navItems: NavItem[] = [
         items: [
           {
             label: "All courses",
-            description: "Classroom, blended and online",
+            description: "In-person, blended and online",
             href: "/courses",
             icon: ListChecks,
           },
@@ -63,10 +66,27 @@ export const navItems: NavItem[] = [
             icon: Laptop,
           },
           {
-            label: "Upcoming dates",
-            description: "Book a place on the next course",
+            label: "Course dates",
+            description: "Upcoming dates by course and format",
             href: "/book",
             icon: CalendarBlank,
+          },
+        ],
+      },
+      {
+        title: "Medication",
+        items: [
+          {
+            label: "Buccal Midazolam Training",
+            description: "Supporting a seizure care plan",
+            href: "/courses/buccal-midazolam",
+            icon: Pill,
+          },
+          {
+            label: "EpiPen Training",
+            description: "Responding to severe allergic reactions",
+            href: "/courses/epipen",
+            icon: Syringe,
           },
         ],
       },
@@ -74,9 +94,11 @@ export const navItems: NavItem[] = [
         title: "Already enrolled",
         items: [
           {
-            label: "Course login",
-            description: "Open your e-learning portal",
-            href: "https://www.p8courses.com/",
+            // The p8courses page takes a course ID from the joining email. It is
+            // not a learner sign-in, so it is labelled for what it does.
+            label: "Join a course",
+            description: "Enter the course ID from your email",
+            href: joinCourseUrl,
             icon: SignIn,
             external: true,
           },
@@ -90,10 +112,15 @@ export const navItems: NavItem[] = [
       },
     ],
   },
+  { id: 3, label: "About", href: "/about" },
+  { id: 4, label: "Policies", href: "/policies" },
+  { id: 5, label: "FAQs", href: "/#faq" },
+  { id: 6, label: "Contact", href: "/contact" },
   {
     id: 2,
     label: "Shop",
     href: "/shop",
+    variant: "outlined",
     subMenus: [
       {
         title: "Defibrillators",
@@ -118,30 +145,4 @@ export const navItems: NavItem[] = [
       },
     ],
   },
-  {
-    id: 3,
-    label: "About",
-    href: "/about",
-    subMenus: [
-      {
-        title: "Pulse 8",
-        items: [
-          {
-            label: "About Pulse 8",
-            description: "Instructors, PHECC approval, how we work",
-            href: "/about",
-            icon: Info,
-          },
-          {
-            label: "Policies",
-            description: "Learner policies, privacy and cancellations",
-            href: "/policies",
-            icon: Scroll,
-          },
-        ],
-      },
-    ],
-  },
-  { id: 4, label: "FAQs", href: "/#faq" },
-  { id: 5, label: "Contact", href: "/contact" },
 ];

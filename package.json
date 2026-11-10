@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "check:booking": "node scripts/booking-check.mjs",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
@@ -16,6 +18,8 @@
     "next": "16.2.10",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "server-only": "^0.0.1",
+    "stripe": "^19.3.0",
     "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {

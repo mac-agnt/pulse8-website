@@ -4,26 +4,26 @@ import type { ExtraSession } from "@/lib/content";
 /**
  * Course schedule.
  *
- * PLACEHOLDER DATA. Pulse 8 has no public dates feed, so this builds a
- * plausible rolling schedule from the real course list: real titles, real
- * durations, real class sizes, generated dates and seat counts. It is
- * deterministic for a given anchor date, so the server and the client agree.
+ * Two sources. Dates entered in the dashboard (`extraSessions`) are Pulse 8's
+ * own, published dates. `buildSchedule` is a DEVELOPMENT FIXTURE: a plausible
+ * rolling timetable built from the real course list, with generated dates and
+ * seat counts, so the calendar can be worked on without live data. Fixture
+ * sessions carry `sample: true`, are only rendered where fixtures are switched
+ * on (see lib/sessions.server.ts), and can never be booked.
  *
- * To go live, replace `buildSchedule` with a fetch against the booking system
- * and keep the `Session` shape. Nothing else on the page needs to change.
+ * Every time here is Europe/Dublin wall-clock time.
  */
 
 export type Venue = "Pulse 8 Training Centre, Dublin" | "Live online";
 
 export type Session = {
+  /** stable: detail links, booking and payment all carry this id */
   id: string;
   courseSlug: string;
   title: string;
   delivery: Delivery;
   certificate?: string;
-  /** euro, per person */
-  price: number;
-  duration: string;
+  duration?: string;
   /** YYYY-MM-DD */
   date: string;
   /** HH:MM, 24 hour */
@@ -34,7 +34,15 @@ export type Session = {
   venue: Venue;
   capacity: number;
   seatsLeft: number;
+  /** generated fixture, not a real date. Never bookable. */
+  sample: boolean;
 };
+
+/** What the next step on a date is. There is no waiting list on this build. */
+export type SessionAction = "book" | "enquire";
+
+/** A session as public pages receive it, with its action decided on the server. */
+export type PublicSession = Session & { action: SessionAction };
 
 const HORIZON_DAYS = 120;
 const MS_DAY = 86_400_000;
@@ -58,7 +66,7 @@ function seeded(seed: number) {
 
 /** "18 hours", "150 minutes" and "3 to 6 hours" all resolve to a number of hours. */
 function hoursFor(course: Course): number {
-  const value = course.duration.toLowerCase();
+  const value = (course.duration ?? "").toLowerCase();
   const first = Number.parseFloat(value.replace(/[^0-9.]+/g, " ").trim().split(/\s+/)[0] ?? "");
   if (!Number.isFinite(first)) return 3;
   return value.includes("minute") ? first / 60 : first;
@@ -77,6 +85,46 @@ function toTime(minutes: number): string {
 
 export function isoDate(date: Date): string {
   return date.toISOString().slice(0, 10);
+}
+
+/**
+ * The current day and time in Ireland, as the strings sessions are stored in.
+ * Sessions are wall-clock Dublin times, so comparing against UTC would show
+ * yesterday's dates for the first hour of every summer day.
+ */
+export function dublinNow(now: Date = new Date()): { date: string; time: string } {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Europe/Dublin",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(now)
+      .map((part) => [part.type, part.value]),
+  );
+  return {
+    date: `${parts.year}-${parts.month}-${parts.day}`,
+    time: `${parts.hour}:${parts.minute}`,
+  };
+}
+
+/** Sort key. Wall-clock strings order correctly across daylight-saving changes. */
+export function sessionKey(session: Pick<Session, "date" | "start" | "id">): string {
+  return `${session.date}T${session.start}|${session.id}`;
+}
+
+export function compareSessions(a: Session, b: Session): number {
+  return sessionKey(a).localeCompare(sessionKey(b));
+}
+
+/** True for a session that has not started yet, judged in Dublin time. */
+export function isUpcoming(session: Pick<Session, "date" | "start">, now: Date = new Date()): boolean {
+  const { date, time } = dublinNow(now);
+  return session.date > date || (session.date === date && session.start > time);
 }
 
 /**
@@ -132,10 +180,6 @@ export function addDays(iso: string, step: number): string {
   return isoDate(new Date(new Date(`${iso}T00:00:00Z`).getTime() + step * MS_DAY));
 }
 
-export function formatPrice(euro: number): string {
-  return `\u20ac${euro}`;
-}
-
 export function formatMonth(monthIso: string): string {
   return new Date(`${monthIso}-01T00:00:00Z`).toLocaleDateString("en-IE", {
     month: "long",
@@ -171,11 +215,13 @@ function slotsFor(hours: number, index: number): Array<{ start: string; days: nu
   return [{ start: "12:30", days: 1 }, { start: "18:30", days: 1 }];
 }
 
-export function buildSchedule(anchor: Date): Session[] {
+export function buildSchedule(anchor: Date, courseList: Course[] = courses): Session[] {
   const from = new Date(Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth(), 1));
   const sessions: Session[] = [];
 
-  courses.forEach((course, index) => {
+  courseList.forEach((course, index) => {
+    // Courses with no confirmed duration get no generated dates.
+    if (!course.duration || course.status === "draft") return;
     const hours = hoursFor(course);
     const slots = slotsFor(hours, index);
     const cadence = cadenceFor(course, index);
@@ -197,12 +243,11 @@ export function buildSchedule(anchor: Date): Session[] {
         const roll = random();
 
         sessions.push({
-          id: `${course.slug}-${isoDate(date)}-${start}`,
+          id: `sample-${course.slug}-${isoDate(date)}-${start.replace(":", "")}`,
           courseSlug: course.slug,
           title: course.title,
           delivery: course.delivery,
           certificate: course.certificate,
-          price: course.price,
           duration: course.duration,
           date: isoDate(date),
           start,
@@ -213,17 +258,18 @@ export function buildSchedule(anchor: Date): Session[] {
           capacity,
           // Most dates have room. A few are full, so that state is visible.
           seatsLeft: roll < 0.12 ? 0 : Math.max(1, Math.round(roll * capacity)),
+          sample: true,
         });
       });
     }
   });
 
-  return sessions.sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
+  return sessions.sort(compareSessions);
 }
 
 /**
  * A date added by hand in the dashboard, expanded into the same shape the
- * generated schedule uses. Anything the editor did not set (title, price,
+ * generated schedule uses. Anything the editor did not set (title,
  * certificate, duration) is read off the course, so the two sources cannot
  * drift apart.
  */
@@ -233,7 +279,7 @@ export function expandExtraSessions(
 ): Session[] {
   return extras.flatMap((extra) => {
     const course = courseList.find((item) => item.slug === extra.courseSlug);
-    if (!course) return [];
+    if (!course || course.status === "draft") return [];
 
     const hours = hoursFor(course);
     const days = Math.max(1, extra.days);
@@ -246,7 +292,6 @@ export function expandExtraSessions(
         title: course.title,
         delivery: extra.online ? "Online" : course.delivery,
         certificate: course.certificate,
-        price: course.price,
         duration: course.duration,
         date: extra.date,
         start: extra.start,
@@ -255,6 +300,7 @@ export function expandExtraSessions(
         venue: extra.online ? "Live online" : "Pulse 8 Training Centre, Dublin",
         capacity: Math.max(capacity, extra.seatsLeft),
         seatsLeft: extra.seatsLeft,
+        sample: false,
       },
     ];
   });
@@ -262,7 +308,5 @@ export function expandExtraSessions(
 
 /** The generated schedule with the dashboard's dates merged in, in date order. */
 export function mergeSessions(generated: Session[], extras: Session[]): Session[] {
-  return [...generated, ...extras].sort((a, b) =>
-    (a.date + a.start).localeCompare(b.date + b.start),
-  );
+  return [...generated, ...extras].sort(compareSessions);
 }

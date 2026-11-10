@@ -164,7 +164,7 @@ export function AdminShell({ initialContent }: { initialContent: SiteContent }) 
     const courses = content.courses.map((course) => ({
       id: "courses",
       title: course.title,
-      detail: `${course.delivery} · €${course.price}`,
+      detail: `${course.delivery}${course.price !== undefined ? ` · €${course.price}` : ""}`,
     }));
     const all = [...pages, ...courses];
     if (!term) return all.slice(0, 8);

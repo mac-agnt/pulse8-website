@@ -109,6 +109,63 @@ are right and no `vercel.json` is needed.
 - `sitemap.xml` and `robots.txt` are generated for `https://pulse8.ie`, and
   every old WordPress URL redirects (see `next.config.ts`).
 
+## Booking, payments and email (November 2026)
+
+From Tom O'Donoghue's feedback of 8 November 2026. Public pages show no course
+prices; rates live server-side (`lib/course-prices.server.ts`, or the
+dashboard) and only the booking API reads them.
+
+| Piece | Where |
+| --- | --- |
+| Enquiry form handler (home and /contact) | `app/api/enquiry/route.ts` |
+| Mail transport (Resend REST, dev outbox) | `lib/mail/send.server.ts` |
+| Published dates for public pages | `lib/sessions.server.ts` |
+| Checkout creation | `app/api/checkout/route.ts` |
+| Stripe webhook (only thing that marks paid) | `app/api/stripe/webhook/route.ts` |
+| Return page | `app/book/return/page.tsx` |
+| Bookings, holds, processed events | `lib/booking/store.server.ts` |
+| Booking emails | `lib/booking/notify.server.ts` |
+| Staff: list bookings / retry an email | `GET /api/admin/bookings`, `POST /api/admin/bookings/<ref>/emails` |
+
+### Environment
+
+| Variable | Purpose |
+| --- | --- |
+| `RESEND_API_KEY`, `MAIL_FROM` | Email. `MAIL_FROM` must be on a domain verified in Resend, e.g. `Pulse 8 website <website@pulse8.ie>`. Without a key, development writes mail to `.data/outbox/` and production fails closed. |
+| `BOOKING_PAYMENTS_ENABLED=1` | Turns on "Book a place". Off by default: every date offers enquiry. |
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Stripe. Test keys only until go-live; a live key also needs `BOOKING_ALLOW_LIVE=1`. |
+| `SITE_URL` (+ optional `SITE_URL_ALLOWLIST`) | Origins Stripe may return customers to. |
+| `BOOKING_STAFF_EMAILS` | Paid-booking notifications. Default `info@pulse8.ie`. |
+| `NEXT_PUBLIC_WHATSAPP_NUMBER` | Digits with country code. Link hidden while unset. |
+| `NEXT_PUBLIC_STUDENT_LOGIN_URL` | Student login in the header. Hidden while unset. |
+| `SCHEDULE_FIXTURES` | `1`/`0` forces the generated sample dates on/off. Default: on in development only. Sample dates never book. |
+
+Stripe webhook endpoint: `https://<site>/api/stripe/webhook`, events
+`checkout.session.completed`, `checkout.session.async_payment_succeeded`,
+`checkout.session.async_payment_failed`, `checkout.session.expired`.
+
+### Checks
+
+```bash
+npm run lint && npm run typecheck && npm run build && npm run check:booking
+```
+
+`check:booking` runs the production build against a local Stripe mock and a
+JSON mail outbox: prices absent from public pages and data, enquiry headers
+and validation, server-side amounts, holds and the last-seat race, signed
+webhooks, replays, delayed and failed payments, expiry, amount mismatch, and
+email failure with independent retry. Nothing leaves the machine.
+
+### Before live payments
+
+- **Durable store.** `lib/booking/store.server.ts` is a JSON file with an
+  in-process lock. Fine for one Node process; not for Vercel (read-only file
+  system, several instances). Put Postgres or similar behind the same
+  functions first.
+- **Rates.** Every figure in `lib/course-prices.server.ts` is a placeholder.
+- **Payment model, staff recipients, Stripe receipt settings** are Pulse 8's
+  call; see the handoff list.
+
 ## Before this goes live
 
 1. **Confirm four durations.** `patient-moving-handling-course` (18 hours),
@@ -116,9 +173,8 @@ are right and no `vercel.json` is needed.
    carry what looks like a copy-paste of the 18-hour First Aid Response entry on
    the current site. They are flagged `unverifiedDuration: true` in
    `lib/data.ts`.
-2. **Wire the quote form.** `components/sections/QuoteForm.tsx` holds a sending
-   state and then reports success without posting anywhere. Point it at the
-   Gravity Forms endpoint or a route handler.
+2. **Email sender.** The quote form now posts to `/api/enquiry`; set
+   `RESEND_API_KEY` and a verified `MAIL_FROM` (see above).
 3. **Wire the shop order form.** `sendOrderRequest` in
    `components/shop/OrderRequestForm.tsx` waits and then succeeds; the typed
    order (customer, lines, subtotal) is already assembled for it. The old store
@@ -136,5 +192,5 @@ are right and no `vercel.json` is needed.
 6. **Google rating and figures.** The 5.0 rating, 4,000+ students, 200+ clients
    and 100% satisfaction all come from the current site's own claims. Check they
    still hold before publishing.
-7. **Course prices.** Still placeholders, see the note at the top of
-   `lib/data.ts`. Shop prices are the real published ones.
+7. **Course prices.** Placeholders, server-side only, see
+   `lib/course-prices.server.ts`. Shop prices are the real published ones.

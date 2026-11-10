@@ -205,6 +205,9 @@
     position: absolute;
     inset: 0;
     z-index: -1;
+    /* clip-path hides the zoomed photo's overspill but does not stop it
+       widening the page, which gave phones a sideways scroll. */
+    overflow: hidden;
     will-change: clip-path;
   }
 

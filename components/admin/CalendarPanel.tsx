@@ -68,7 +68,7 @@ export function CalendarPanel({
       {
         ...draft,
         note: draft.note?.trim() ? draft.note.trim() : undefined,
-        id: `extra-${draft.courseSlug}-${draft.date}-${draft.start}-${sessions.length}`,
+        id: `extra-${draft.courseSlug}-${draft.date}-${draft.start.replace(":", "")}-${crypto.randomUUID().slice(0, 8)}`,
       },
     ]);
   };

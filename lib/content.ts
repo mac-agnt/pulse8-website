@@ -48,11 +48,13 @@ export type SiteContent = {
 
 export const defaultContent: SiteContent = {
   hero: {
-    eyebrow: "PHECC Approved Training Institute",
+    // Shown beside the PHECC mark under the hero buttons. Proposed wording,
+    // pending Pulse 8's confirmation of the approved label.
+    eyebrow: "PHECC Approved Training Institution (ATI)",
     // Words in *asterisks* get the gradient.
-    headline: "Ready before the *ambulance arrives*",
+    headline: "First aid and safety training across Ireland",
     subline:
-      "Certified first aid, fire safety and manual handling training. At your workplace, on a public date, or online.",
+      "Pulse 8 delivers first aid, fire safety and manual handling training nationwide, with blended, in-person and online options.",
     primaryCta: "Book a course",
     secondaryCta: "Browse courses",
   },
@@ -62,7 +64,7 @@ export const defaultContent: SiteContent = {
     steps: [
       {
         title: "Pick a date, or bring us in",
-        body: "Book a seat on a public course online, or tell us your numbers and we run it at your place.",
+        body: "Book a place on a scheduled date, or tell us your numbers and we run it at your place.",
       },
       {
         title: "Practise it hands on",
