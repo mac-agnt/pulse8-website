@@ -61,8 +61,8 @@ export const navItems: NavItem[] = [
           },
           {
             label: "Blended learning",
-            description: "First Aid Response, theory online",
-            href: "/courses/first-aid-response-blended",
+            description: "Theory online, then a practical day",
+            href: "/courses#blended-learning",
             icon: Laptop,
           },
           {

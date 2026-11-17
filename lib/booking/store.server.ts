@@ -1,20 +1,17 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import path from "node:path";
+import type { StoreBackend, StoreTx } from "@/lib/booking/store-backend.server";
+import { fileBackend } from "@/lib/booking/store-file.server";
+import { pgBackend } from "@/lib/booking/store-pg.server";
 
 /**
  * Bookings, seat holds and processed Stripe events.
  *
- * DEVELOPMENT AND TEST STORE. A JSON file guarded by an in-process lock: every
- * read-modify-write runs one at a time, so holds are atomic within one server
- * process and the file is replaced by rename, never half-written. That is the
- * right shape for `next dev`, a single Node host and the automated checks.
- *
- * It is NOT enough for live payments on Vercel: the file system there is
- * read-only and several instances can run at once. Before live enablement,
- * put a transactional store (Postgres or similar) behind these same functions.
- * Nothing outside this file touches storage.
+ * Every booking rule lives here; storage sits behind a small backend
+ * (store-backend.server.ts). With BOOKING_DATABASE_URL set it is Postgres,
+ * which is what live payments on Vercel need. Without it, a JSON file under
+ * .data/, which is right for `next dev`, a single Node host and the automated
+ * checks. Nothing outside these files touches storage.
  */
 
 export type EmailKind = "customer" | "staff";
@@ -36,7 +33,35 @@ export type OrderStatus =
   | "expired"
   | "failed"
   /** paid, but no seat could be assigned. Staff must resolve it. */
-  | "exception";
+  | "exception"
+  /** paid, then refunded in full in Stripe. The places are free again. */
+  | "refunded";
+
+/** One person on a Blended Learning booking. Each gets their own account and email from BL. */
+export type Attendee = { firstName: string; lastName: string; email: string };
+
+export type BlendedEventKind = "confirmed" | "refunded";
+
+/** Delivery of one signed event to Blended Learning, retried on its own like an email. */
+export type DeliveryRecord = {
+  status: "pending" | "sent" | "failed";
+  attempts: number;
+  lastAttemptAt?: string;
+  lastError?: string;
+  sentAt?: string;
+};
+
+/** Set on orders for a practical day that Pulse 8 Blended Learning runs. */
+export type BlendedBooking = {
+  /** BL course id: the key, never changes */
+  courseId: string;
+  /** BL course slug when the booking was made, which BL's booking API asks for */
+  courseSlug: string;
+  /** BL practical day id, without the website's `bl_` prefix */
+  sessionId: string;
+  attendees: Attendee[];
+  deliveries: Partial<Record<BlendedEventKind, DeliveryRecord>>;
+};
 
 export type Order = {
   /** booking reference, shown to the customer */
@@ -68,86 +93,49 @@ export type Order = {
   createdAt: string;
   paidAt?: string;
   exceptionReason?: string;
+  /** cents refunded in Stripe so far */
+  amountRefunded?: number;
+  refundedAt?: string;
   emails: Record<EmailKind, EmailRecord>;
+  blended?: BlendedBooking;
 };
 
-type StoreData = {
-  orders: Order[];
-  /** Stripe event ids already handled, newest last */
-  events: string[];
-};
-
-const MAX_EVENTS = 5000;
-
-function storeFile(): string {
-  const dir = process.env.BOOKING_DATA_DIR ?? path.join(process.cwd(), ".data");
-  return path.join(dir, "bookings.json");
+function backend(): StoreBackend {
+  return process.env.BOOKING_DATABASE_URL ? pgBackend : fileBackend;
 }
 
-async function load(): Promise<StoreData> {
-  try {
-    const parsed = JSON.parse(await readFile(storeFile(), "utf8")) as Partial<StoreData>;
-    return {
-      orders: Array.isArray(parsed.orders) ? parsed.orders : [],
-      events: Array.isArray(parsed.events) ? parsed.events : [],
-    };
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { orders: [], events: [] };
-    throw error;
-  }
-}
+const transaction = <T>(work: (tx: StoreTx) => Promise<T>) => backend().transaction(work);
+const reads = () => backend().reads;
 
-async function save(data: StoreData): Promise<void> {
-  const file = storeFile();
-  await mkdir(path.dirname(file), { recursive: true });
-  const temp = `${file}.${process.pid}.${Date.now()}.tmp`;
-  await writeFile(temp, `${JSON.stringify(data, null, 2)}\n`, "utf8");
-  await rename(temp, file);
-}
-
-let queue: Promise<unknown> = Promise.resolve();
-
-/** Runs one read-modify-write at a time. */
-function transaction<T>(work: (data: StoreData) => T | Promise<T>): Promise<T> {
-  const run = queue.then(async () => {
-    const data = await load();
-    const result = await work(data);
-    await save(data);
-    return result;
-  });
-  // Keep the chain alive after a failure.
-  queue = run.catch(() => undefined);
-  return run;
-}
-
-async function read<T>(work: (data: StoreData) => T): Promise<T> {
-  await queue.catch(() => undefined);
-  return work(await load());
-}
-
+/**
+ * Whether an order takes up a place in the website's own count.
+ *
+ * Paid, settling and unexpired pending orders do. One exception: a paid
+ * Blended Learning booking stops counting once BL has accepted it, because
+ * from then on it is inside BL's own `places_left`, and counting it here too
+ * would take the place twice.
+ */
 function holdsSeat(order: Order, now: number): boolean {
-  if (order.status === "paid") return true;
+  if (order.status === "paid") return order.blended?.deliveries.confirmed?.status !== "sent";
   // A delayed payment method has been authorised; keep the seat until it settles.
   if (order.status === "processing") return true;
   return order.status === "pending" && Date.parse(order.holdExpiresAt) > now;
 }
 
-function seatsTakenIn(data: StoreData, sessionId: string, now: number, except?: string): number {
-  return data.orders
-    .filter((order) => order.sessionId === sessionId && order.id !== except && holdsSeat(order, now))
+function seatsTaken(orders: Order[], now: number, except?: string): number {
+  return orders
+    .filter((order) => order.id !== except && holdsSeat(order, now))
     .reduce((total, order) => total + order.quantity, 0);
 }
 
 /** Places taken or held per session, for public availability. */
-export function seatsTakenBySession(now = Date.now()): Promise<Map<string, number>> {
-  return read((data) => {
-    const map = new Map<string, number>();
-    for (const order of data.orders) {
-      if (!holdsSeat(order, now)) continue;
-      map.set(order.sessionId, (map.get(order.sessionId) ?? 0) + order.quantity);
-    }
-    return map;
-  });
+export async function seatsTakenBySession(now = Date.now()): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+  for (const order of await reads().live()) {
+    if (!holdsSeat(order, now)) continue;
+    map.set(order.sessionId, (map.get(order.sessionId) ?? 0) + order.quantity);
+  }
+  return map;
 }
 
 function newReference(): string {
@@ -161,11 +149,12 @@ function newReference(): string {
 
 export type HoldRequest = Omit<
   Order,
-  "id" | "status" | "createdAt" | "holdExpiresAt" | "emails" | "amountTotal"
+  "id" | "status" | "createdAt" | "holdExpiresAt" | "emails" | "amountTotal" | "blended"
 > & {
   /** seats Pulse 8 has released for online booking on this date */
   capacity: number;
   holdMinutes: number;
+  blended?: Omit<BlendedBooking, "deliveries">;
 };
 
 export type HoldResult =
@@ -177,23 +166,23 @@ export type HoldResult =
  * attempt returns the order already created for it instead of a second hold.
  */
 export function createHold(request: HoldRequest): Promise<HoldResult> {
-  return transaction((data) => {
+  return transaction(async (tx): Promise<HoldResult> => {
     const now = Date.now();
-    const existing = data.orders.find(
+    const sessionOrders = await tx.bySession(request.sessionId);
+    const existing = sessionOrders.find(
       (order) =>
         order.attemptKey === request.attemptKey &&
-        order.sessionId === request.sessionId &&
         order.status === "pending" &&
         Date.parse(order.holdExpiresAt) > now,
     );
-    if (existing) return { ok: true, order: existing, reused: true } as const;
+    if (existing) return { ok: true, order: existing, reused: true };
 
-    const free = request.capacity - seatsTakenIn(data, request.sessionId, now);
+    const free = request.capacity - seatsTaken(sessionOrders, now);
     if (request.quantity < 1 || free < request.quantity) {
-      return { ok: false, reason: "unavailable" } as const;
+      return { ok: false, reason: "unavailable" };
     }
 
-    const { capacity: _capacity, holdMinutes, ...fields } = request;
+    const { capacity: _capacity, holdMinutes, blended, ...fields } = request;
     void _capacity;
     const order: Order = {
       ...fields,
@@ -206,19 +195,29 @@ export function createHold(request: HoldRequest): Promise<HoldResult> {
         customer: { status: "pending", attempts: 0 },
         staff: { status: "pending", attempts: 0 },
       },
+      ...(blended ? { blended: { ...blended, deliveries: {} } } : {}),
     };
-    data.orders.push(order);
-    return { ok: true, order, reused: false } as const;
+    await tx.put(order);
+    return { ok: true, order, reused: false };
   });
 }
 
-export function attachCheckout(
+/** Changes one order inside a transaction; `change` may return a value. */
+function update<T>(orderId: string, change: (order: Order) => T): Promise<T | undefined> {
+  return transaction(async (tx) => {
+    const order = await tx.get(orderId);
+    if (!order) return undefined;
+    const result = change(order);
+    await tx.put(order);
+    return result;
+  });
+}
+
+export async function attachCheckout(
   orderId: string,
   checkout: { id: string; url: string; expiresAt: number },
 ): Promise<void> {
-  return transaction((data) => {
-    const order = data.orders.find((item) => item.id === orderId);
-    if (!order) return;
+  await update(orderId, (order) => {
     order.checkoutSessionId = checkout.id;
     order.checkoutUrl = checkout.url;
     // Tie the hold to Checkout's own expiry, with a minute's grace.
@@ -227,23 +226,26 @@ export function attachCheckout(
 }
 
 /** Releases a hold that never reached Checkout. */
-export function releaseHold(orderId: string, status: "expired" | "failed" = "failed"): Promise<void> {
-  return transaction((data) => {
-    const order = data.orders.find((item) => item.id === orderId);
-    if (order && (order.status === "pending" || order.status === "processing")) order.status = status;
+export async function releaseHold(orderId: string, status: "expired" | "failed" = "failed"): Promise<void> {
+  await update(orderId, (order) => {
+    if (order.status === "pending" || order.status === "processing") order.status = status;
   });
 }
 
 export function getOrder(orderId: string): Promise<Order | undefined> {
-  return read((data) => data.orders.find((order) => order.id === orderId));
+  return reads().get(orderId);
 }
 
 export function getOrderByCheckoutSession(checkoutSessionId: string): Promise<Order | undefined> {
-  return read((data) => data.orders.find((order) => order.checkoutSessionId === checkoutSessionId));
+  return reads().findBy("checkoutSessionId", checkoutSessionId);
+}
+
+export function getOrderByPaymentIntent(paymentIntentId: string): Promise<Order | undefined> {
+  return reads().findBy("paymentIntentId", paymentIntentId);
 }
 
 export function listOrders(): Promise<Order[]> {
-  return read((data) => [...data.orders]);
+  return reads().all();
 }
 
 /**
@@ -251,19 +253,12 @@ export function listOrders(): Promise<Order[]> {
  * replayed or concurrently delivered event is handled once.
  */
 export function claimEvent(eventId: string): Promise<boolean> {
-  return transaction((data) => {
-    if (data.events.includes(eventId)) return false;
-    data.events.push(eventId);
-    if (data.events.length > MAX_EVENTS) data.events.splice(0, data.events.length - MAX_EVENTS);
-    return true;
-  });
+  return transaction((tx) => tx.claimEvent(eventId));
 }
 
 /** Forgets an event whose handling failed part-way, so Stripe's retry runs it again. */
 export function unclaimEvent(eventId: string): Promise<void> {
-  return transaction((data) => {
-    data.events = data.events.filter((id) => id !== eventId);
-  });
+  return transaction((tx) => tx.unclaimEvent(eventId));
 }
 
 export type PaidOutcome =
@@ -283,8 +278,8 @@ export function markPaid(
   /** current seats released for the session, or null if the session is gone */
   capacity: number | null,
 ): Promise<PaidOutcome> {
-  return transaction((data): PaidOutcome => {
-    const order = data.orders.find((item) => item.id === orderId);
+  return transaction(async (tx): Promise<PaidOutcome> => {
+    const order = await tx.get(orderId);
     if (!order) return { kind: "missing" };
     if (order.status === "paid") return { kind: "confirmed", order, firstTime: false };
     if (order.status === "exception") return { kind: "exception", order, firstTime: false };
@@ -296,27 +291,30 @@ export function markPaid(
     if (!holdsSeat(order, now)) {
       // The hold lapsed (or the session changed). Confirm only if the seat is
       // genuinely still free; otherwise staff decide.
-      const free = capacity === null ? 0 : capacity - seatsTakenIn(data, order.sessionId, now, order.id);
+      const free =
+        capacity === null ? 0 : capacity - seatsTaken(await tx.bySession(order.sessionId), now, order.id);
       if (free < order.quantity) {
         order.status = "exception";
         order.exceptionReason =
           capacity === null
             ? "Paid for a session that is no longer published. Contact the customer and confirm or refund."
             : "Payment arrived after the seat hold expired and the session no longer has room. Confirm or refund.";
+        await tx.put(order);
         return { kind: "exception", order, firstTime: true };
       }
     }
 
     order.status = "paid";
+    if (order.blended) order.blended.deliveries.confirmed ??= { status: "pending", attempts: 0 };
+    await tx.put(order);
     return { kind: "confirmed", order, firstTime: true };
   });
 }
 
 /** Checkout completed with a payment that has not settled (delayed methods). */
 export function markProcessing(orderId: string, paymentIntentId: string | undefined): Promise<Order | undefined> {
-  return transaction((data) => {
-    const order = data.orders.find((item) => item.id === orderId);
-    if (order && order.status === "pending") {
+  return update(orderId, (order) => {
+    if (order.status === "pending") {
       order.status = "processing";
       order.paymentIntentId = paymentIntentId ?? order.paymentIntentId;
     }
@@ -324,14 +322,12 @@ export function markProcessing(orderId: string, paymentIntentId: string | undefi
   });
 }
 
-export function recordEmail(
+export async function recordEmail(
   orderId: string,
   kind: EmailKind,
   outcome: { ok: true; providerId?: string } | { ok: false; error: string },
 ): Promise<void> {
-  return transaction((data) => {
-    const order = data.orders.find((item) => item.id === orderId);
-    if (!order) return;
+  await update(orderId, (order) => {
     const record = order.emails[kind];
     record.attempts += 1;
     if (outcome.ok) {
@@ -346,15 +342,83 @@ export function recordEmail(
   });
 }
 
+/** Records one attempt to deliver an event to Blended Learning. */
+export async function recordBlendedDelivery(
+  orderId: string,
+  kind: BlendedEventKind,
+  outcome: { ok: true } | { ok: false; error: string },
+): Promise<void> {
+  await update(orderId, (order) => {
+    if (!order.blended) return;
+    const record = (order.blended.deliveries[kind] ??= { status: "pending", attempts: 0 });
+    const now = new Date().toISOString();
+    record.attempts += 1;
+    record.lastAttemptAt = now;
+    if (outcome.ok) {
+      record.status = "sent";
+      record.sentAt = now;
+      delete record.lastError;
+    } else {
+      record.status = "failed";
+      record.lastError = outcome.error.slice(0, 300);
+    }
+  });
+}
+
 /** Marks an order for staff review (amount, currency or session mismatch). */
 export function flagException(orderId: string, reason: string): Promise<Order | undefined> {
-  return transaction((data) => {
-    const order = data.orders.find((item) => item.id === orderId);
-    if (order && order.status !== "paid") {
+  return update(orderId, (order) => {
+    if (order.status !== "paid") {
       order.status = "exception";
       order.exceptionReason = reason;
       order.paidAt ??= new Date().toISOString();
     }
     return order;
+  });
+}
+
+export type RefundOutcome =
+  /** refunded in full: the order is now `refunded` and its places are free */
+  | { kind: "full"; order: Order; firstTime: boolean }
+  /** part refunded: nothing changes but the amount, staff review it */
+  | { kind: "partial"; order: Order; firstTime: boolean }
+  | { kind: "missing" };
+
+/**
+ * A refund reported by Stripe. `amountRefunded` is Stripe's running total for
+ * the charge, so a replay or a repeat for the same total changes nothing and
+ * `firstTime` is false. A part refund changes nothing here at all.
+ */
+export function markRefunded(orderId: string, amountRefunded: number): Promise<RefundOutcome> {
+  return transaction(async (tx): Promise<RefundOutcome> => {
+    const order = await tx.get(orderId);
+    if (!order) return { kind: "missing" };
+    if (order.status === "refunded") return { kind: "full", order, firstTime: false };
+
+    const firstTime = amountRefunded > (order.amountRefunded ?? 0);
+
+    const refundable = order.status === "paid" || order.status === "exception";
+    if (refundable && amountRefunded >= order.amountTotal) {
+      order.status = "refunded";
+      order.amountRefunded = amountRefunded;
+      order.refundedAt = new Date().toISOString();
+      // BL needs telling whenever it may have the booking: always once it was
+      // due there, even if no attempt has been recorded yet (one may be in flight).
+      if (order.blended?.deliveries.confirmed) {
+        order.blended.deliveries.refunded ??= { status: "pending", attempts: 0 };
+      }
+      await tx.put(order);
+      return { kind: "full", order, firstTime: true };
+    }
+
+    // A part refund is only recorded once staff have been told (recordPartialRefund).
+    return { kind: "partial", order, firstTime };
+  });
+}
+
+/** Notes a part refund staff have been told about, so a repeat for the same total is not re-sent. */
+export async function recordPartialRefund(orderId: string, amountRefunded: number): Promise<void> {
+  await update(orderId, (order) => {
+    if (amountRefunded > (order.amountRefunded ?? 0)) order.amountRefunded = amountRefunded;
   });
 }

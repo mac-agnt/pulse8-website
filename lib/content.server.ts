@@ -3,6 +3,7 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { defaultContent, mergeContent, type SiteContent } from "@/lib/content";
 import { defaultCoursePrices } from "@/lib/course-prices.server";
+import { blendedCatalogue } from "@/lib/blended/feed.server";
 import { isPublished, toPublicCourse, type PublicCourse } from "@/lib/data";
 
 /**
@@ -48,10 +49,31 @@ export type PublicContent = Omit<SiteContent, "courses"> & {
   courses: PublicCourse[];
 };
 
-/** What public pages may render: published courses, and no prices anywhere. */
+/**
+ * What public pages may render: published courses, and no prices anywhere.
+ *
+ * Pulse 8 Blended Learning's courses are part of the catalogue: a website
+ * course linked to one carries its `blendedCourseId`, and a BL course with no
+ * website counterpart gets a generated entry. If BL is unreachable those
+ * simply drop out. The dashboard reads `readContent`, so nothing from BL is
+ * ever saved into the content file.
+ */
 export async function readPublicContent(): Promise<PublicContent> {
   const content = await readContent();
-  const courses = content.courses.filter(isPublished).map(toPublicCourse);
+  const published = content.courses.filter(isPublished);
+  const catalogue = await blendedCatalogue(published);
+  const linkedIds = new Map(
+    catalogue.ok
+      ? catalogue.courses.filter((item) => item.linked).map((item) => [item.slug, item.id] as const)
+      : [],
+  );
+  const generated = catalogue.ok ? catalogue.courses.filter((item) => !item.linked).map((item) => item.course) : [];
+  const courses = [
+    ...published.map((course) =>
+      linkedIds.has(course.slug) ? { ...course, blendedCourseId: linkedIds.get(course.slug) } : course,
+    ),
+    ...generated,
+  ].map(toPublicCourse);
   return {
     ...content,
     courses,

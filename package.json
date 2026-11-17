@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "check:booking": "node scripts/booking-check.mjs",
+    "test:unit": "node --test scripts/unit/blended.test.mjs",
+    "check:booking": "npm run test:unit && node scripts/booking-check.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -16,6 +17,7 @@
     "date-fns": "^4.4.0",
     "framer-motion": "^12.42.2",
     "next": "16.2.10",
+    "pg": "^8.23.1",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "server-only": "^0.0.1",
@@ -25,6 +27,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

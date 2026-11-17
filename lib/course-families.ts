@@ -54,14 +54,17 @@ const BY_SLUG: Record<string, FamilyKey> = {
   "level-1-food-safety-manufacturing": "workplace",
 };
 
-/** Anything unmapped falls to the workplace slot rather than inventing a hue. */
-export function familyFor(slug: string): Family {
-  const key = BY_SLUG[slug] ?? "workplace";
+/**
+ * Anything unmapped takes `fallback` (a Blended Learning course says
+ * "response"), or else the workplace slot rather than an invented hue.
+ */
+export function familyFor(slug: string, fallback: FamilyKey = "workplace"): Family {
+  const key = BY_SLUG[slug] ?? fallback;
   return families.find((family) => family.key === key) ?? families[3];
 }
 
-export function colourFor(slug: string): string {
-  return `var(${familyFor(slug).token})`;
+export function colourFor(slug: string, fallback?: FamilyKey): string {
+  return `var(${familyFor(slug, fallback).token})`;
 }
 
 /** Every course is mapped. Guards against a course being added and missed. */

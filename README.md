@@ -95,7 +95,8 @@ FAQ items under /faq-items, which were never Pulse 8 content. Both redirect.
 ## Deploying to Vercel
 
 Import the repository in Vercel; the defaults (Next.js preset, `npm run build`)
-are right and no `vercel.json` is needed.
+are right. `vercel.json` only adds one daily cron, the Blended Learning retry
+(see "Blended learning" below).
 
 - **`ADMIN_PASSWORD`** (optional). The content dashboard at `/admin` is open in
   development only. In production `proxy.ts` puts it behind basic auth using
@@ -142,7 +143,8 @@ dashboard) and only the booking API reads them.
 
 Stripe webhook endpoint: `https://<site>/api/stripe/webhook`, events
 `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
-`checkout.session.async_payment_failed`, `checkout.session.expired`.
+`checkout.session.async_payment_failed`, `checkout.session.expired`, and
+`charge.refunded` (refunds, see "Blended learning" below).
 
 ### Checks
 
@@ -158,13 +160,82 @@ email failure with independent retry. Nothing leaves the machine.
 
 ### Before live payments
 
-- **Durable store.** `lib/booking/store.server.ts` is a JSON file with an
-  in-process lock. Fine for one Node process; not for Vercel (read-only file
-  system, several instances). Put Postgres or similar behind the same
-  functions first.
+- **Durable store.** `lib/booking/store.server.ts` keeps the same functions
+  over two back ends: the JSON file with its in-process lock (development, and
+  the default), or Postgres when `BOOKING_DATABASE_URL` is set. Production on
+  Vercel needs the Postgres one (read-only file system, several instances).
 - **Rates.** Every figure in `lib/course-prices.server.ts` is a placeholder.
 - **Payment model, staff recipients, Stripe receipt settings** are Pulse 8's
   call; see the handoff list.
+
+## Blended learning (November 2026)
+
+Built on top of the booking flow above by Matthew Amiadamen. Pulse 8 Blended
+Learning (`https://blendedlearning-ebon.vercel.app`, soon
+`https://blendedlearning.pulse8.ie`) is where learners do the online theory. It
+now feeds this site its courses, practical days, places left and prices, and
+the existing Stripe checkout, holds and emails take bookings for them. The
+contract is in the BL repo, `docs/website-integration.md`; the plan is
+`docs/blended-learning-plan.md` here.
+
+| Piece | Where |
+| --- | --- |
+| Signing (HMAC-SHA256, both directions) | `lib/blended/signing.ts` |
+| BL course list → courses and dates (pure) | `lib/blended/map.ts` |
+| Fetching and caching the list | `lib/blended/feed.server.ts` |
+| Sending `booking.confirmed` / `booking.refunded` to BL | `lib/blended/notify.server.ts` |
+| BL's "a course changed" message (refreshes the cache) | `app/api/integrations/blended-learning/route.ts` |
+| Daily retry of anything BL missed | `app/api/cron/blended-learning/route.ts`, `vercel.json` |
+| Staff: resend one booking to BL | `POST /api/admin/bookings/<ref>/blended-learning` |
+| Store back ends (file, Postgres) | `lib/booking/store-file.server.ts`, `lib/booking/store-pg.server.ts` |
+
+How it fits together:
+
+- **Dates.** BL's practical days join this site's own on `/book`, with ids
+  `bl_<BL session id>`. A BL course that matches a course here (by BL course
+  id) keeps this site's page and title, e.g. `first-aid-response-blended`;
+  any other BL course gets its own page under `/courses/<slug>`. `/courses`
+  has a "Blended learning" section, which the nav now links to.
+- **Places.** BL's `places_left`, less this site's live holds and paid
+  bookings BL hasn't confirmed yet. Once BL confirms a booking it is in BL's
+  own count and stops being subtracted here, so nothing is counted twice.
+- **Prices.** Only the signed list carries them, and only the checkout reads
+  them, so public pages still show none. A BL course without a price offers
+  enquiry.
+- **Group bookings.** A blended booking takes 1 to 6 attendees, each with a
+  name and their own email. BL sends each of them their sign-in. The buyer
+  still gets your receipt, which now lists the attendees.
+- **Refunds.** A full Stripe refund marks the booking refunded, frees its
+  places and tells BL. A part refund changes nothing automatically; staff get
+  one "Part refund needs review" email.
+- **When BL is down.** The list is cached for an hour and refreshed early
+  when BL says a course changed. If BL can't be reached, blended dates are
+  simply hidden and the rest of the site works. A paid booking BL didn't
+  receive stays paid and is retried by the cron or the staff endpoint, always
+  with the same event id, so a retry never books twice.
+
+### Environment
+
+| Variable | Purpose |
+| --- | --- |
+| `BLENDED_LEARNING_URL` | BL's base URL. Blended dates are hidden while unset. |
+| `BLENDED_LEARNING_SECRET` | Shared signing key; the same value as `BOOKING_WEBHOOK_SECRET` in BL. |
+| `BLENDED_LEARNING_COURSE_LINKS` | Optional. `website-slug=<BL course id>,...` links a course here to a BL course. The dashboard's `blendedCourseId` does the same. |
+| `BOOKING_DATABASE_URL` | Postgres for bookings. Tables are created on first use. Unset: the JSON file. |
+| `CRON_SECRET` | Vercel sends it to the cron. Unset: the cron refuses every call. |
+
+BL sends course changes to `https://<site>/api/integrations/blended-learning`
+(its `WEBSITE_WEBHOOK_URL`).
+
+### Checks
+
+`npm run check:booking` now also runs `npm run test:unit` (the feed mapping
+and signing) and adds a mock BL: dates, places and the no-price case, group
+checkout, the events BL receives, course-change messages (unsigned, wrong,
+stale and tampered ones refused), BL down at payment then the retry, full and
+part refunds, and BL unreachable or not configured. Set
+`BOOKING_CHECK_DATABASE_URL` to a throwaway local Postgres whose name contains
+`test` to run the whole suite again on the Postgres store.
 
 ## Before this goes live
 

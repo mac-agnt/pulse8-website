@@ -48,6 +48,12 @@ export default async function BookingReturnPage({
                 A confirmation is on its way to your email. Quote your booking reference if
                 you contact us.
               </p>
+              {order.blended ? (
+                <p className="mt-3 text-ink-muted">
+                  Each attendee will also get an email from Pulse 8 Blended Learning with their
+                  sign-in link for the online part, to finish any time before the practical day.
+                </p>
+              ) : null}
               <dl className="mt-8 grid gap-4 border-t border-border-soft pt-6 sm:grid-cols-2">
                 {[
                   ["Booking reference", order.id],

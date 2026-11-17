@@ -7,7 +7,7 @@ import { Reveal } from "@/components/ui/Reveal";
 import { CourseBrowser, CourseCard } from "@/components/sections/Courses";
 import { getCourseDetail } from "@/lib/course-details";
 import { readPublicContent } from "@/lib/content.server";
-import { medicationIntro } from "@/lib/data";
+import { medicationIntro, onBlendedLearning } from "@/lib/data";
 
 export const metadata: Metadata = {
   title: "Courses | Pulse 8",
@@ -21,6 +21,7 @@ export const dynamic = "force-dynamic";
 export default async function CoursesPage() {
   const { courses } = await readPublicContent();
   const medication = courses.filter((course) => course.category === "medication");
+  const blended = courses.filter(onBlendedLearning);
 
   // The old site's "E-Learning Courses" page, now a band on this one: every
   // course that can be bought and started on the e-learning portal.
@@ -39,6 +40,36 @@ export default async function CoursesPage() {
       <div className="shell">
         <CourseBrowser courses={courses} limit={null} />
       </div>
+
+      {/* Stable anchor for the Blended learning menu item: every course on Pulse 8 Blended Learning. */}
+      {blended.length > 0 ? (
+        <section
+          id="blended-learning"
+          aria-labelledby="blended-learning-heading"
+          className="shell mt-20 scroll-mt-[calc(7rem+var(--header-offset))] md:mt-28"
+        >
+          <Reveal>
+            <h2
+              id="blended-learning-heading"
+              className="text-3xl leading-[1.1] font-semibold sm:text-4xl"
+            >
+              Blended learning
+            </h2>
+            <p className="mt-5 max-w-[58ch] text-lg text-ink-muted">
+              Do the theory online on Pulse 8 Blended Learning, at your own pace, then come to a
+              practical day with an instructor. Each attendee gets their own sign-in by email
+              after booking.
+            </p>
+          </Reveal>
+          <ul className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {blended.map((course) => (
+              <li key={course.slug}>
+                <CourseCard course={course} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {/* Stable anchor for the Medication menu group. Category, not a format filter. */}
       {medication.length > 0 ? (

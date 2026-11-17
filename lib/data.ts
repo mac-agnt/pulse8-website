@@ -56,6 +56,16 @@ export type Course = {
   clientStatedAccreditation?: string;
   /** fields still waiting on Pulse 8, listed so the dashboard and handoff can show them */
   pendingConfirmation?: string[];
+  /**
+   * Pulse 8 Blended Learning course id. A website course carrying one keeps
+   * its own page and gets BL's practical days and price. Courses that exist
+   * only in BL are generated from its course list with this set too.
+   */
+  blendedCourseId?: string;
+  /** page body for a course generated from Blended Learning, one string per paragraph */
+  description?: string[];
+  /** certificate validity for a generated course, e.g. "2 years" */
+  validity?: string;
 };
 
 /** A course as public pages may see it: no rate. */
@@ -70,6 +80,15 @@ export function toPublicCourse(course: Course): PublicCourse {
 
 export function isPublished(course: Pick<Course, "status">): boolean {
   return course.status !== "draft";
+}
+
+/**
+ * Courses whose online part runs on Pulse 8 Blended Learning: every course
+ * linked to or generated from it, and the blended First Aid Response, which
+ * links to its BL course once BLENDED_LEARNING_COURSE_LINKS names it.
+ */
+export function onBlendedLearning(course: Pick<Course, "slug" | "blendedCourseId">): boolean {
+  return Boolean(course.blendedCourseId) || course.slug === "first-aid-response-blended";
 }
 
 export const courses: Course[] = [

@@ -7,6 +7,8 @@
  * page, it just shows the card blurb.
  */
 
+import type { Course } from "@/lib/data";
+
 export type DetailSection = {
   heading: string;
   /** paragraphs */
@@ -96,13 +98,13 @@ export const courseDetails: Record<string, CourseDetail> = {
   },
   "first-aid-response-blended": {
     intro: [
-      "The blended First Aid Response (FAR) course leads to the same PHECC certificate as the classroom course, which the Health and Safety Authority (HSA) recognises as meeting the needs of occupational first aid. The theory is completed online on the Pulse 8 e-learning portal at your own pace, and the practical skills are taught and assessed in person by a PHECC registered instructor.",
+      "The blended First Aid Response (FAR) course leads to the same PHECC certificate as the classroom course, which the Health and Safety Authority (HSA) recognises as meeting the needs of occupational first aid. The theory is completed online on Pulse 8 Blended Learning, at your own pace and any time before your practical day, with your sign-in emailed to you after booking. The practical skills are taught and assessed in person by a PHECC registered instructor.",
     ],
     sections: [
       {
         heading: "How it works",
         items: [
-          "Complete the online theory on the Pulse 8 e-learning portal",
+          "Complete the online theory on Pulse 8 Blended Learning, with your sign-in emailed after booking",
           "Attend the instructor-led practical session",
           "Be assessed on your practical skills and complete the MCQ (Multiple Choice Question) exam",
         ],
@@ -705,4 +707,35 @@ export const courseDetails: Record<string, CourseDetail> = {
 
 export function getCourseDetail(slug: string): CourseDetail | undefined {
   return courseDetails[slug];
+}
+
+/**
+ * Page body for a course that exists only in Pulse 8 Blended Learning: its own
+ * description from BL, and how a blended booking works.
+ */
+export function blendedCourseDetail(
+  course: Pick<Course, "blurb" | "delivery" | "description" | "validity">,
+): CourseDetail {
+  const practical = course.delivery === "Blended";
+  return {
+    intro: course.description?.length ? course.description : [course.blurb],
+    sections: [
+      {
+        heading: "How it works",
+        items: practical
+          ? [
+              "Choose a practical day and book your places",
+              "Each attendee gets an email with their sign-in to Pulse 8 Blended Learning",
+              "Complete the online part at your own pace, any time before the day",
+              "Attend the practical day, where your skills are taught and assessed in person",
+            ]
+          : [
+              "Book your places",
+              "Each attendee gets an email with their sign-in to Pulse 8 Blended Learning",
+              "Complete the course online at your own pace",
+            ],
+      },
+    ],
+    validity: course.validity,
+  };
 }

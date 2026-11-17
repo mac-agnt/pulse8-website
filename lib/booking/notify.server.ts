@@ -22,6 +22,12 @@ function when(order: Order): string {
   return `${formatDayLong(order.sessionDate)}, ${order.sessionStart} to ${order.sessionEnd}${days} (Irish time)`;
 }
 
+function attendeeList(order: Order): string {
+  return (order.blended?.attendees ?? [])
+    .map((attendee) => `${attendee.firstName} ${attendee.lastName}`.trim() + ` (${attendee.email})`)
+    .join(", ");
+}
+
 function customerMail(order: Order) {
   const rows: Array<[string, string]> = [
     ["Booking reference", order.id],
@@ -29,11 +35,13 @@ function customerMail(order: Order) {
     ["Date and time", when(order)],
     ["Location", `${order.venue} (${order.delivery})`],
     ["Places", String(order.quantity)],
+    ...(order.blended ? ([["Attendees", attendeeList(order)]] as Array<[string, string]>) : []),
     ["Amount paid", formatAmount(order.amountTotal, order.currency)],
   ];
   const intro = `Hi ${order.buyer.name}, thanks for booking with Pulse 8. Your place is confirmed.`;
-  const outro =
-    "We'll send any joining instructions before the course. If you have a question, reply to this email or write to info@pulse8.ie and quote your booking reference.";
+  const outro = order.blended
+    ? "The online part of the course is on Pulse 8 Blended Learning. Each attendee will get their own email from it with their sign-in link and the practical day details; they can complete the online part any time before the day. If you have a question, reply to this email or write to info@pulse8.ie and quote your booking reference."
+    : "We'll send any joining instructions before the course. If you have a question, reply to this email or write to info@pulse8.ie and quote your booking reference.";
   return {
     to: [order.buyer.email],
     replyTo: "info@pulse8.ie",
@@ -59,6 +67,12 @@ function staffMail(order: Order) {
     ["Currency", order.currency.toUpperCase()],
     ["Stripe Checkout Session", order.checkoutSessionId ?? "unknown"],
     ["Stripe PaymentIntent", order.paymentIntentId ?? "unknown"],
+    ...(order.blended
+      ? ([
+          ["Attendees", attendeeList(order)],
+          ["Blended Learning", `course ${order.blended.courseSlug}, practical day ${order.blended.sessionId}. Accounts and the course email are sent by Blended Learning.`],
+        ] as Array<[string, string]>)
+      : []),
     ["Mode", order.livemode ? "live" : "TEST"],
   ];
   const subject = `${review ? "Paid course booking needs review" : "Paid course booking"} | ${order.courseTitle} | ${order.id}`;
@@ -99,4 +113,36 @@ export async function sendDueBookingEmails(orderId: string): Promise<void> {
 
 export function emailIsDue(order: Order, kind: EmailKind): boolean {
   return due(order).includes(kind);
+}
+
+/**
+ * A part refund made in Stripe. The booking is left as it is (places,
+ * Blended Learning access), so staff decide what, if anything, changes. The
+ * provider key is fixed per booking and refunded total, so a retry cannot
+ * deliver twice.
+ */
+export function sendRefundReviewEmail(order: Order, amountRefunded: number) {
+  const rows: Array<[string, string]> = [
+    ["ACTION NEEDED", "Part of this booking was refunded in Stripe. Nothing was changed automatically: places and any Blended Learning access are as they were. Decide whether the booking or its attendees should change."],
+    ["Booking reference", order.id],
+    ["Buyer", order.buyer.name],
+    ["Buyer email", order.buyer.email],
+    ["Course", order.courseTitle],
+    ["Session", `${when(order)}, ${order.venue}`],
+    ["Places", String(order.quantity)],
+    ...(order.blended ? ([["Attendees", attendeeList(order)]] as Array<[string, string]>) : []),
+    ["Paid", formatAmount(order.amountTotal, order.currency)],
+    ["Refunded so far", formatAmount(amountRefunded, order.currency)],
+    ["Stripe PaymentIntent", order.paymentIntentId ?? "unknown"],
+    ["Mode", order.livemode ? "live" : "TEST"],
+  ];
+  const subject = `Part refund needs review | ${order.courseTitle} | ${order.id}`;
+  return sendMail({
+    to: staffRecipients(),
+    replyTo: order.buyer.email,
+    subject: order.livemode ? subject : `[TEST] ${subject}`,
+    text: `${detailsText(rows)}\n`,
+    html: detailsHtml(rows),
+    idempotencyKey: `refund-review-${order.id}-${amountRefunded}`,
+  });
 }

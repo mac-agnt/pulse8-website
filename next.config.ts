@@ -60,6 +60,13 @@ const POLICY_PDFS: Record<string, string> = {
 };
 
 const nextConfig: NextConfig = {
+  // Course pictures from Pulse 8 Blended Learning's storage (lib/blended/map.ts
+  // drops any other host before it reaches a page).
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "*.supabase.co", pathname: "/storage/v1/object/public/**" },
+    ],
+  },
   async redirects() {
     const moved = (source: string, destination: string) => ({
       source,

@@ -1,5 +1,6 @@
 import { courses, type Course, type Delivery } from "@/lib/data";
 import type { ExtraSession } from "@/lib/content";
+import type { FamilyKey } from "@/lib/course-families";
 
 /**
  * Course schedule.
@@ -14,7 +15,8 @@ import type { ExtraSession } from "@/lib/content";
  * Every time here is Europe/Dublin wall-clock time.
  */
 
-export type Venue = "Pulse 8 Training Centre, Dublin" | "Live online";
+/** Pulse 8's own two, or a Blended Learning practical day's venue as BL names it. */
+export type Venue = "Pulse 8 Training Centre, Dublin" | "Live online" | (string & {});
 
 export type Session = {
   /** stable: detail links, booking and payment all carry this id */
@@ -36,6 +38,8 @@ export type Session = {
   seatsLeft: number;
   /** generated fixture, not a real date. Never bookable. */
   sample: boolean;
+  /** calendar colour family, for courses the slug map does not know (Blended Learning ones) */
+  family?: FamilyKey;
 };
 
 /** What the next step on a date is. There is no waiting list on this build. */

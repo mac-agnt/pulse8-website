@@ -84,7 +84,7 @@ function SessionRow({
     >
       <span
         aria-hidden="true"
-        style={{ backgroundColor: colourFor(session.courseSlug) }}
+        style={{ backgroundColor: colourFor(session.courseSlug, session.family) }}
         className="absolute inset-y-0 left-0 w-1"
       />
       <div
@@ -144,6 +144,89 @@ function SessionRow({
   );
 }
 
+type AttendeeDraft = { firstName: string; lastName: string; email: string };
+
+const emptyAttendee: AttendeeDraft = { firstName: "", lastName: "", email: "" };
+
+/** "Aoife Ní Bhriain" → first name and the rest, for pre-filling attendee 1. */
+function fromBuyer(name: string, email: string): AttendeeDraft {
+  const [firstName = "", ...rest] = name.trim().split(/\s+/);
+  return { firstName, lastName: rest.join(" "), email: email.trim() };
+}
+
+/**
+ * Who is attending a Pulse 8 Blended Learning day: one row per place. The
+ * first row follows the buyer's own name and email until it is edited, so a
+ * single booking needs no extra typing.
+ */
+function AttendeeFields({
+  rows,
+  onChange,
+}: {
+  rows: AttendeeDraft[];
+  onChange: (index: number, field: keyof AttendeeDraft, value: string) => void;
+}) {
+  return (
+    <div role="group" aria-labelledby="booking-attendees" className="grid gap-4 border-t border-border-soft pt-4">
+      <div>
+        <h3 id="booking-attendees" className="text-[0.9375rem] font-semibold text-ink">
+          Who is attending
+        </h3>
+        <p className="mt-1 text-[0.8125rem] text-ink-muted">
+          The online part is on Pulse 8 Blended Learning. Each attendee gets their own email
+          with their sign-in link after booking.
+        </p>
+      </div>
+      {rows.map((row, index) => (
+        <div key={index} className="grid gap-4 rounded-xl border border-border-soft p-4">
+          <p className="figure text-[0.8125rem] font-medium text-ink-muted">Attendee {index + 1}</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className={fieldLabel} htmlFor={`attendee-${index}-first`}>
+                First name
+              </label>
+              <input
+                id={`attendee-${index}-first`}
+                required
+                maxLength={100}
+                value={row.firstName}
+                onChange={(event) => onChange(index, "firstName", event.target.value)}
+                className={field}
+              />
+            </div>
+            <div>
+              <label className={fieldLabel} htmlFor={`attendee-${index}-last`}>
+                Last name
+              </label>
+              <input
+                id={`attendee-${index}-last`}
+                maxLength={100}
+                value={row.lastName}
+                onChange={(event) => onChange(index, "lastName", event.target.value)}
+                className={field}
+              />
+            </div>
+          </div>
+          <div>
+            <label className={fieldLabel} htmlFor={`attendee-${index}-email`}>
+              Email
+            </label>
+            <input
+              id={`attendee-${index}-email`}
+              type="email"
+              required
+              maxLength={254}
+              value={row.email}
+              onChange={(event) => onChange(index, "email", event.target.value)}
+              className={field}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** Booking summary. The total is shown by Stripe Checkout before the customer pays. */
 function BookingForm({
   session,
@@ -158,6 +241,27 @@ function BookingForm({
   // One key per attempt: a double click or a retry reuses the same order and hold.
   const [attemptKey] = useState(() => crypto.randomUUID());
   const maxPlaces = Math.max(1, Math.min(session.seatsLeft, MAX_PLACES));
+  // A Pulse 8 Blended Learning practical day: each place needs a named attendee.
+  const blended = session.id.startsWith("bl_");
+  const [buyer, setBuyer] = useState({ name: "", email: "" });
+  const [extraAttendees, setExtraAttendees] = useState<AttendeeDraft[]>([]);
+  const [firstAttendee, setFirstAttendee] = useState<AttendeeDraft | null>(null);
+  const attendees = [
+    firstAttendee ?? fromBuyer(buyer.name, buyer.email),
+    ...Array.from({ length: places - 1 }, (_, index) => extraAttendees[index] ?? emptyAttendee),
+  ];
+
+  function changeAttendee(index: number, key: keyof AttendeeDraft, value: string) {
+    if (index === 0) {
+      setFirstAttendee({ ...attendees[0], [key]: value });
+      return;
+    }
+    setExtraAttendees((current) => {
+      const next = [...current];
+      next[index - 1] = { ...(current[index - 1] ?? emptyAttendee), [key]: value };
+      return next;
+    });
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -177,6 +281,7 @@ function BookingForm({
           email: form.get("email"),
           phone: form.get("phone"),
           attemptKey,
+          ...(blended ? { attendees } : {}),
         }),
       });
       const result = (await response.json().catch(() => null)) as
@@ -219,7 +324,15 @@ function BookingForm({
           <label className={fieldLabel} htmlFor="booking-name">
             Name
           </label>
-          <input id="booking-name" name="name" required maxLength={120} autoComplete="name" className={field} />
+          <input
+            id="booking-name"
+            name="name"
+            required
+            maxLength={120}
+            autoComplete="name"
+            onChange={(event) => setBuyer((current) => ({ ...current, name: event.target.value }))}
+            className={field}
+          />
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
@@ -233,6 +346,7 @@ function BookingForm({
               required
               maxLength={254}
               autoComplete="email"
+              onChange={(event) => setBuyer((current) => ({ ...current, email: event.target.value }))}
               className={field}
             />
           </div>
@@ -274,6 +388,8 @@ function BookingForm({
             .
           </p>
         </div>
+
+        {blended ? <AttendeeFields rows={attendees} onChange={changeAttendee} /> : null}
 
         <p className="flex items-start gap-2 border-t border-border-soft pt-4 text-[0.875rem] text-ink-muted">
           <LockSimple size={16} weight="bold" className="mt-0.5 shrink-0 text-ink-faint" />
@@ -403,7 +519,7 @@ export function BookingCalendar({
           time: `${session.start} to ${session.end}`,
           datetime: `${session.date}T${session.start}`,
           unavailable: session.seatsLeft === 0,
-          colour: colourFor(session.courseSlug),
+          colour: colourFor(session.courseSlug, session.family),
         })),
       })),
     [byDate],

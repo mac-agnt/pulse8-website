@@ -17,7 +17,7 @@ import {
 import { PageShell } from "@/components/layout/PageShell";
 import { Button } from "@/components/ui/Button";
 import { CourseImageFallback } from "@/components/sections/Courses";
-import { getCourseDetail, type DetailSection } from "@/lib/course-details";
+import { blendedCourseDetail, getCourseDetail, type DetailSection } from "@/lib/course-details";
 import { familyFor } from "@/lib/course-families";
 import { readPublicContent } from "@/lib/content.server";
 import { getPublicSessions } from "@/lib/sessions.server";
@@ -29,6 +29,10 @@ import { cn } from "@/lib/cn";
 export const dynamic = "force-dynamic";
 
 type Props = { params: Promise<{ slug: string }> };
+
+/** Courses from Blended Learning are first aid; everything else is mapped by slug. */
+const familyOf = (course: PublicCourse) =>
+  familyFor(course.slug, course.blendedCourseId ? "response" : undefined);
 
 /** Published courses only, so a draft has no route. */
 async function findCourse(
@@ -163,14 +167,15 @@ export default async function CoursePage({ params }: Props) {
   if (!found) notFound();
 
   const { course, all } = found;
-  const detail = getCourseDetail(course.slug);
-  const family = familyFor(course.slug);
+  const detail =
+    getCourseDetail(course.slug) ?? (course.blendedCourseId ? blendedCourseDetail(course) : undefined);
+  const family = familyOf(course);
   const groupLabel = course.category ? courseCategories[course.category] : family.label;
 
   // Same family first, then anything else, so there are always three.
   const related = [
-    ...all.filter((c) => c.slug !== course.slug && familyFor(c.slug).key === family.key),
-    ...all.filter((c) => c.slug !== course.slug && familyFor(c.slug).key !== family.key),
+    ...all.filter((c) => c.slug !== course.slug && familyOf(c).key === family.key),
+    ...all.filter((c) => c.slug !== course.slug && familyOf(c).key !== family.key),
   ].slice(0, 3);
 
   // The next few dates for this course, from the same source the dates page uses.

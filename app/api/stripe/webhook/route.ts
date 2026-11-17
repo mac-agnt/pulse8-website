@@ -5,12 +5,16 @@ import {
   claimEvent,
   flagException,
   getOrder,
+  getOrderByPaymentIntent,
   markPaid,
   markProcessing,
+  markRefunded,
+  recordPartialRefund,
   releaseHold,
   unclaimEvent,
 } from "@/lib/booking/store.server";
-import { sendDueBookingEmails } from "@/lib/booking/notify.server";
+import { sendDueBookingEmails, sendRefundReviewEmail } from "@/lib/booking/notify.server";
+import { sendDueBlendedEvents } from "@/lib/blended/notify.server";
 import { releasedSeats } from "@/lib/sessions.server";
 
 export const runtime = "nodejs";
@@ -24,7 +28,13 @@ export const dynamic = "force-dynamic";
  * id, amount, currency). Each event id is claimed once, so a replay or a
  * concurrent duplicate is a no-op, and the paid transition itself is
  * idempotent too. Emails are sent after the booking is committed; a failed
- * email is recorded and retried separately, it never undoes the booking.
+ * email is recorded and retried separately, it never undoes the booking. The
+ * same goes for the signed message that tells Pulse 8 Blended Learning about a
+ * booking on one of its practical days.
+ *
+ * `charge.refunded`: a full refund marks the booking refunded, frees its
+ * places and tells Blended Learning to cancel every attendee; a partial refund
+ * changes nothing and asks staff to review it.
  */
 export async function POST(request: Request) {
   const stripe = stripeClient();
@@ -66,6 +76,8 @@ function paymentIntentId(checkout: Stripe.Checkout.Session): string | undefined 
 }
 
 async function handle(event: Stripe.Event) {
+  if (event.type === "charge.refunded") return refunded(event.data.object as Stripe.Charge);
+
   switch (event.type) {
     case "checkout.session.completed":
     case "checkout.session.async_payment_succeeded":
@@ -130,4 +142,27 @@ async function fulfil(orderId: string, intent: string | undefined) {
   const outcome = await markPaid(orderId, intent, await releasedSeats(order.sessionId));
   if (outcome.kind === "missing") return;
   await sendDueBookingEmails(orderId);
+  await sendDueBlendedEvents(orderId);
+}
+
+async function refunded(charge: Stripe.Charge) {
+  const intent = typeof charge.payment_intent === "string" ? charge.payment_intent : charge.payment_intent?.id;
+  if (!intent) return;
+  const order = await getOrderByPaymentIntent(intent);
+  if (!order) return; // Not one of ours (for example a shop payment link).
+  if (charge.livemode !== order.livemode || charge.currency !== order.currency) {
+    console.error(`[webhook] charge.refunded for ${order.id} did not match the booking`);
+    return;
+  }
+
+  // Stripe's running total for the charge, so a replay changes nothing.
+  const outcome = await markRefunded(order.id, charge.amount_refunded);
+  if (outcome.kind === "full") {
+    await sendDueBlendedEvents(order.id);
+  } else if (outcome.kind === "partial" && outcome.firstTime) {
+    const result = await sendRefundReviewEmail(outcome.order, charge.amount_refunded);
+    // Nothing else records a partial refund, so let Stripe retry until staff hear of it.
+    if (!result.ok) throw new Error(`refund review email failed: ${result.error}`);
+    await recordPartialRefund(order.id, charge.amount_refunded);
+  }
 }

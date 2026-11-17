@@ -7,8 +7,8 @@ import {
   returnOrigin,
 } from "@/lib/booking/config.server";
 import { stripeClient } from "@/lib/booking/stripe.server";
-import { attachCheckout, createHold, releaseHold } from "@/lib/booking/store.server";
-import { getBookableSession } from "@/lib/sessions.server";
+import { attachCheckout, createHold, releaseHold, type Attendee } from "@/lib/booking/store.server";
+import { getBookableSession, isBlendedSessionId } from "@/lib/sessions.server";
 import { formatDayLong } from "@/lib/schedule";
 import { clientKey, emailAddress, phoneNumber, rateLimited, singleLine } from "@/lib/validate.server";
 
@@ -25,6 +25,30 @@ function fail(status: number, error: string) {
   return NextResponse.json({ error }, { status });
 }
 
+const ATTENDEES_INVALID = "Enter a first name and a valid email for each attendee.";
+const ATTENDEES_DUPLICATE = "Each attendee needs their own email address.";
+
+/**
+ * Who is attending a Blended Learning day: one entry per place, each with a
+ * first name and their own email (Blended Learning gives each one an account
+ * and sends the sign-in link there).
+ */
+function readAttendees(value: unknown, quantity: number): Attendee[] | { error: string } {
+  if (!Array.isArray(value) || value.length !== quantity) return { error: ATTENDEES_INVALID };
+  const attendees: Attendee[] = [];
+  for (const item of value) {
+    const entry = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
+    const firstName = singleLine(entry.firstName, 100);
+    const lastName = singleLine(entry.lastName ?? "", 100);
+    const email = emailAddress(entry.email);
+    if (!firstName || lastName === null || !email) return { error: ATTENDEES_INVALID };
+    attendees.push({ firstName, lastName, email });
+  }
+  const emails = new Set(attendees.map((attendee) => attendee.email.toLowerCase()));
+  if (emails.size !== attendees.length) return { error: ATTENDEES_DUPLICATE };
+  return attendees;
+}
+
 /**
  * Starts a paid booking.
  *
@@ -33,6 +57,9 @@ function fail(status: number, error: string) {
  * only which session, how many places and who is booking. A seat hold is taken
  * atomically before Stripe is called and expires with the Checkout Session; a
  * repeat of the same attempt returns the same Checkout rather than a second one.
+ *
+ * A Blended Learning day (`bl_` id) is priced and counted from a fresh read of
+ * BL's course list, and also needs each attendee's name and email.
  */
 export async function POST(request: Request) {
   const config = paymentConfig();
@@ -67,9 +94,16 @@ export async function POST(request: Request) {
     return fail(400, `You can book between 1 and ${MAX_PLACES_PER_BOOKING} places online.`);
   }
 
+  let attendees: Attendee[] | undefined;
+  if (isBlendedSessionId(sessionId)) {
+    const read = readAttendees(body.attendees, quantity);
+    if (!Array.isArray(read)) return fail(400, read.error);
+    attendees = read;
+  }
+
   const bookable = await getBookableSession(sessionId);
   if (!bookable) return fail(409, NOT_OPEN);
-  const { session, course, unitAmountCents } = bookable;
+  const { session, course, unitAmountCents, blended } = bookable;
 
   let hold;
   try {
@@ -91,6 +125,7 @@ export async function POST(request: Request) {
       livemode: config.livemode,
       capacity: session.seatsLeft,
       holdMinutes: HOLD_MINUTES,
+      ...(blended && attendees ? { blended: { ...blended, attendees } } : {}),
     });
   } catch (error) {
     console.error("[checkout] could not record the hold:", (error as Error).message);
