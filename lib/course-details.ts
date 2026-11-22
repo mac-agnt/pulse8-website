@@ -341,7 +341,7 @@ export const courseDetails: Record<string, CourseDetail> = {
       {
         heading: "Our trainers",
         body: [
-          "Pulse 8 is an Approved Training Institute with PHECC (Pre-Hospital Emergency Care Council).",
+          "Pulse 8 is a Recognised Institution with PHECC (Pre-Hospital Emergency Care Council).",
           "At Pulse 8 we are very passionate about providing all the schools with a very highly professional service. We are the leading provider in Dublin and indeed throughout Ireland.",
           "All our trainers are Occupational First Aid Instructors, Paramedics, Advanced Paramedics and fire fighters. They are all fully insured and are affiliated with Pulse 8.",
           "All instructors are monitored on an ongoing basis so we can stand over our quality assurance.",

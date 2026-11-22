@@ -15,12 +15,12 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://pulse8.ie"),
   title: "Pulse 8 | First aid and safety training in Ireland",
   description:
-    "PHECC Approved Training Institute delivering first aid, fire safety and manual handling training across Ireland, in your workplace or online.",
+    "A PHECC Recognised Institution delivering first aid, fire safety and manual handling training across Ireland, in your workplace or online.",
   icons: { icon: "/brand/favicon.png" },
   openGraph: {
     title: "Pulse 8 | First aid and safety training in Ireland",
     description:
-      "PHECC Approved Training Institute delivering first aid, fire safety and manual handling training across Ireland.",
+      "A PHECC Recognised Institution delivering first aid, fire safety and manual handling training across Ireland.",
     url: "https://pulse8.ie",
     siteName: "Pulse 8",
     locale: "en_IE",

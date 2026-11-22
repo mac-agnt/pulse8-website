@@ -414,7 +414,7 @@ export type Fact = { value: string; label: string; note: string };
 
 export const facts: Fact[] = [
   { value: "2010", label: "Training since", note: "Sixteen years in the field" },
-  { value: "PHECC", label: "Approved Training Institute", note: "Assessed and audited" },
+  { value: "PHECC", label: "Recognised Institution", note: "At First Aid Response level" },
   // The value is replaced with the published catalogue count wherever this renders.
   { value: "19", label: "Courses", note: "Classroom, blended and online" },
   { value: "5.0", label: "Google rating", note: "From verified reviews" },
@@ -461,18 +461,20 @@ export const trustFigures = [
 /**
  * Bodies named across the Pulse 8 course pages.
  *
- * Only PHECC supplies a mark in this repo. To show the rest as logos rather
- * than wordmarks, drop the files in /public/brand/accreditations/ and set
- * `logo` here. Anything without a `logo` renders as a plain wordmark.
+ * To show one as a logo rather than a wordmark, drop the file in
+ * /public/brand/accreditations/ and set `logo` here. Anything without a
+ * `logo` renders as a plain wordmark.
+ *
+ * PHECC has no `logo` here on purpose: its policy only allows the mark with
+ * its prescribed text and a link to phecc.ie, never in a row of other marks.
+ * The hero carries it that way (components/ui/PhecMark.tsx).
  */
 export type Accreditation = { name: string; note?: string; logo?: string };
 
 export const accreditations: Accreditation[] = [
-  {
-    name: "PHECC",
-    note: "Approved Training Institute since 2010",
-    logo: "/brand/phecc.png",
-  },
+  // PHECC's register: "Pulse 8 Responder Ltd", Recognised Institution. The
+  // year is pending Pulse 8's confirmation (see `phecc.year` in lib/brand.ts).
+  { name: "PHECC", note: "Recognised Institution" },
   // The HSA recognises the PHECC FAR standard, it does not accredit Pulse 8, so
   // this one stays a wordmark on purpose. See the note in
   // public/brand/accreditations/README.md before giving it a badge.

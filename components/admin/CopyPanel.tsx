@@ -23,12 +23,6 @@ export function CopyPanel({
     <div className="flex flex-col gap-5">
       <Card id="copy-hero" title="Hero" description="The first screen of the home page">
         <div className="flex flex-col gap-5">
-          <Field label="Accreditation label" hint="Shown beside the PHECC mark under the hero buttons">
-            <TextInput
-              value={hero.eyebrow}
-              onChange={(event) => onChange({ hero: { ...hero, eyebrow: event.target.value } })}
-            />
-          </Field>
           <Field label="Headline" hint="Two lines at most. Wrap words in *asterisks* to give them the gradient.">
             <TextInput
               value={hero.headline}

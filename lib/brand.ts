@@ -16,14 +16,33 @@ export const logo: { onLight: Artwork; onDark: Artwork } = {
 };
 
 /**
- * The accreditation group under the hero buttons.
+ * PHECC's mark, used under PHECC policy POL007 (v2). PHECC's register lists
+ * "Pulse 8 Responder Ltd" as a Recognised Institution (not an "Approved
+ * Training Institute"), for CFR Community, Emergency Medicines (Epinephrine)
+ * and First Aid Response. The policy's rules, all applied by PhecMark:
  *
- * PHECC's mark is the one already on the site. The ATI artwork, exact label,
- * minimum size and clear space are waiting on Pulse 8; add the file here as
- * `ati` when it arrives and the hero picks it up. The label itself is the
- * editable hero eyebrow in the dashboard.
+ *   - the mark always appears with the Appendix 1 text below (name,
+ *     "Recognised at level of" the highest approved level, and the year);
+ *   - on the web it links to https://www.phecc.ie;
+ *   - it is never the dominant logo on a page, keeps clear space round it and
+ *     is only scaled in proportion;
+ *   - the artwork is never redrawn, trimmed, recoloured or combined with
+ *     other marks (it sits on its own white plate, whatever the background);
+ *   - it is for training only: keep it off pages that advertise service
+ *     provision (the shop pages don't carry it).
+ *
+ * The file is the artwork from the old site's footer, which matches PHECC's
+ * own header. PHECC asks for its master artwork; Pulse 8 have been asked for
+ * it. Replace the file (same name) when it arrives.
  */
-export const heroAccreditation: { phecc: Artwork; ati: Artwork | null } = {
-  phecc: { src: "/brand/phecc.png", width: 625, height: 326, alt: "PHECC" },
-  ati: null,
-};
+export const phecc = {
+  mark: { src: "/brand/phecc.png", width: 625, height: 326, alt: "PHECC, Pre-Hospital Emergency Care Council" },
+  href: "https://www.phecc.ie",
+  institution: "Pulse 8 Responder Ltd",
+  level: "First Aid Response",
+  /**
+   * PENDING Pulse 8's confirmation: 2010 is the old site's own claim. Tom has
+   * been asked for the year PHECC first recognised Pulse 8.
+   */
+  year: "2010",
+} as const;

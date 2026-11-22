@@ -301,9 +301,12 @@ Setting up the database and email for production, with prices:
    what this site actually stores (three browser storage entries, no tracking).
    Have whoever owns compliance sign it off, and update it if analytics are
    added.
-5. **Accreditation marks.** Only PHECC supplied a logo. HSA, CPD, IIRSM, IOSH and
-   Gatehouse Awards are set as wordmarks rather than invented marks. Swap in real
-   artwork when the client provides it.
+5. **Accreditation marks.** PHECC's mark follows PHECC policy POL007: it shows
+   only with its prescribed text and a link to phecc.ie (`components/ui/PhecMark.tsx`,
+   rules in `lib/brand.ts`). Pulse 8 is a PHECC **Recognised Institution** (not an
+   "Approved Training Institute"); the year, 2010, and PHECC's master artwork are
+   both waiting on Pulse 8. See `public/brand/accreditations/README.md` for those
+   and for the CPD, IIRSM, IOSH and Gatehouse marks.
 6. **Google rating and figures.** The 5.0 rating, 4,000+ students, 200+ clients
    and 100% satisfaction all come from the current site's own claims. Check they
    still hold before publishing.

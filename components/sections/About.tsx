@@ -21,14 +21,15 @@ import {
 } from "framer-motion";
 import { Button } from "@/components/ui/Button";
 import { Reveal, RevealGroup, RevealItem } from "@/components/ui/Reveal";
+import { phecc } from "@/lib/brand";
 import { cn } from "@/lib/cn";
 import { defaultContent, type ProcessCopy } from "@/lib/content";
 
 const credentials = [
   {
     icon: Certificate,
-    title: "PHECC approved",
-    body: "An Approved Training Institute with the Pre-Hospital Emergency Care Council since 2010.",
+    title: "PHECC recognised",
+    body: `A Recognised Institution with the Pre-Hospital Emergency Care Council since ${phecc.year}, at First Aid Response level.`,
   },
   {
     icon: ShieldCheck,

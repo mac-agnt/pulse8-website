@@ -3,6 +3,7 @@ import { HighlightHeadline } from "@/components/ui/HighlightHeadline";
 import { Reveal } from "@/components/ui/Reveal";
 import { accreditations, type Fact } from "@/lib/data";
 import { defaultContent } from "@/lib/content";
+import { phecc } from "@/lib/brand";
 
 /**
  * Split panel, directly under the hero.
@@ -34,8 +35,8 @@ export function Overview({ facts = defaultContent.facts }: { facts?: Fact[] }) {
             <HighlightHeadline text={HEADLINE} />
             <hr className="mt-9 border-border" />
             <p className="mt-8 max-w-[46ch] text-lg leading-relaxed text-ink-muted">
-              PHECC Approved Training Institute since 2010. Join a scheduled course, or ask
-              us to train your team at your own premises.
+              A PHECC Recognised Institution since {phecc.year}. Join a scheduled course, or
+              ask us to train your team at your own premises.
             </p>
           </Reveal>
 
@@ -99,7 +100,7 @@ export function Overview({ facts = defaultContent.facts }: { facts?: Fact[] }) {
           </dl>
 
           <p className="mt-10 text-[0.6875rem] font-medium tracking-[0.16em] text-white/60 uppercase">
-            PHECC Approved Training Institute
+            PHECC Recognised Institution
           </p>
         </div>
       </div>

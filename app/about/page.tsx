@@ -13,12 +13,13 @@ import {
 import { PageShell } from "@/components/layout/PageShell";
 import { Button } from "@/components/ui/Button";
 import { Reveal, RevealGroup, RevealItem } from "@/components/ui/Reveal";
+import { phecc } from "@/lib/brand";
 import { clients, trustFigures } from "@/lib/data";
 
 export const metadata: Metadata = {
   title: "About | Pulse 8",
   description:
-    "Pulse 8 is a PHECC Approved Training Institute delivering first aid and health and safety training across Ireland since 2010, taught by paramedics and certified instructors.",
+    "Pulse 8 is a PHECC Recognised Institution delivering first aid and health and safety training across Ireland since 2010, taught by paramedics and certified instructors.",
 };
 
 export const revalidate = 3600;
@@ -63,7 +64,7 @@ const reasons = [
   "Hands-on, practical learning with valuable takeaways",
 ];
 
-const figures = [...trustFigures, { value: "2010", label: "PHECC approved since" }];
+const figures = [...trustFigures, { value: phecc.year, label: "PHECC recognised since" }];
 
 export default function AboutPage() {
   return (
@@ -82,7 +83,7 @@ export default function AboutPage() {
             courses for businesses, schools, sports clubs, healthcare, and more.
           </p>
           <p className="mt-4 max-w-[52ch] leading-relaxed text-ink-muted">
-            We are an Approved Training Institute with PHECC, the Pre-Hospital Emergency Care
+            We are a Recognised Institution with PHECC, the Pre-Hospital Emergency Care
             Council. Our instructors range from paramedics and EMTs to the fire service and
             first aid instructors, and every session is fully insured. We also supply first
             aid kits and defibrillators, so the training and the kit come from one place.

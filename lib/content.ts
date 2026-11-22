@@ -48,9 +48,9 @@ export type SiteContent = {
 
 export const defaultContent: SiteContent = {
   hero: {
-    // Shown beside the PHECC mark under the hero buttons. Proposed wording,
-    // pending Pulse 8's confirmation of the approved label.
-    eyebrow: "PHECC Approved Training Institution (ATI)",
+    // No longer shown: PHECC prescribes the text beside its mark, so the hero
+    // uses PhecMark (lib/brand.ts). Kept so older saved content still loads.
+    eyebrow: "PHECC Recognised Institution",
     // Words in *asterisks* get the gradient.
     headline: "First aid and safety training across Ireland",
     subline:

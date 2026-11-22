@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { EnvelopeSimple, MapPin, Phone, WhatsappLogo } from "@phosphor-icons/react/dist/ssr";
-import { logo } from "@/lib/brand";
+import { logo, phecc } from "@/lib/brand";
 import { contact } from "@/lib/data";
 import { whatsappUrl } from "@/lib/site-config";
 
@@ -62,7 +62,7 @@ export function Footer() {
               />
             </Link>
             <p className="mt-6 max-w-[36ch] text-[1rem] leading-relaxed text-on-navy-muted">
-              PHECC Approved Training Institute since 2010. First aid, fire safety and manual
+              PHECC Recognised Institution since {phecc.year}. First aid, fire safety and manual
               handling training, in your workplace or online.
             </p>
             <p className="mt-7 inline-flex items-center gap-3 text-[0.9375rem] text-on-navy-muted">

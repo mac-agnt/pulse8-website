@@ -1,9 +1,9 @@
 import Image from "next/image";
+import { PhecMark } from "@/components/ui/PhecMark";
 import { ArrowRight, CalendarBlank } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/Button";
 import { HeroFrame } from "@/components/ui/HeroFrame";
 import { Reveal } from "@/components/ui/Reveal";
-import { heroAccreditation } from "@/lib/brand";
 import { defaultContent, type HeroCopy } from "@/lib/content";
 
 /**
@@ -13,10 +13,10 @@ import { defaultContent, type HeroCopy } from "@/lib/content";
  * under prefers-reduced-motion. HeroFrame owns the white border and curved
  * corners that form around the photograph as the page scrolls.
  *
- * Under the buttons sits the compact accreditation group: the PHECC mark
- * beside the ATI label (and the ATI artwork, once Pulse 8 supplies it, see
- * lib/brand.ts). The label is the dashboard's hero "eyebrow" field. Customer
- * logos are not here; they have their own section further down.
+ * Under the buttons sits PHECC's mark with the text its policy prescribes,
+ * linked to phecc.ie (PhecMark; rules in lib/brand.ts). The text is fixed, not
+ * a dashboard field, because PHECC prescribes it. Customer logos are not here;
+ * they have their own section further down.
  */
 const HERO_IMAGE = "/site/hero-bg.jpg";
 
@@ -77,33 +77,8 @@ export function Hero({ copy = defaultContent.hero }: { copy?: HeroCopy }) {
         </Reveal>
 
         <Reveal onMount delay={0.32}>
-          <div className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-3">
-            <div className="flex items-center gap-2">
-              {/* A light plate, so the full-colour marks hold contrast on the photograph. */}
-              <span className="flex h-11 items-center rounded-[var(--radius-control)] bg-surface px-2.5">
-                <Image
-                  src={heroAccreditation.phecc.src}
-                  alt={heroAccreditation.phecc.alt}
-                  width={heroAccreditation.phecc.width}
-                  height={heroAccreditation.phecc.height}
-                  className="h-7 w-auto"
-                />
-              </span>
-              {heroAccreditation.ati ? (
-                <span className="flex h-11 items-center rounded-[var(--radius-control)] bg-surface px-2.5">
-                  <Image
-                    src={heroAccreditation.ati.src}
-                    alt={heroAccreditation.ati.alt}
-                    width={heroAccreditation.ati.width}
-                    height={heroAccreditation.ati.height}
-                    className="h-7 w-auto"
-                  />
-                </span>
-              ) : null}
-            </div>
-            <p className="max-w-[30ch] text-[0.875rem] leading-snug font-medium text-white/85">
-              {copy.eyebrow}
-            </p>
+          <div className="mt-8">
+            <PhecMark />
           </div>
         </Reveal>
       </div>
