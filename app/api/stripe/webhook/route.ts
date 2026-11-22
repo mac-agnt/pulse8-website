@@ -15,6 +15,7 @@ import {
 } from "@/lib/booking/store.server";
 import { sendDueBookingEmails, sendRefundReviewEmail } from "@/lib/booking/notify.server";
 import { sendDueBlendedEvents } from "@/lib/blended/notify.server";
+import { handleShopCheckout, handleShopRefund } from "@/lib/booking/shop-webhook.server";
 import { releasedSeats } from "@/lib/sessions.server";
 
 export const runtime = "nodejs";
@@ -35,6 +36,9 @@ export const dynamic = "force-dynamic";
  * `charge.refunded`: a full refund marks the booking refunded, frees its
  * places and tells Blended Learning to cancel every attendee; a partial refund
  * changes nothing and asks staff to review it.
+ *
+ * Shop orders carry `shop_order_id` in their metadata and are handled in
+ * lib/booking/shop-webhook.server.ts, after the same checks above.
  */
 export async function POST(request: Request) {
   const stripe = stripeClient();
@@ -89,8 +93,11 @@ async function handle(event: Stripe.Event) {
   }
 
   const checkout = event.data.object as Stripe.Checkout.Session;
+  const shopOrderId = checkout.metadata?.shop_order_id;
+  if (shopOrderId) return handleShopCheckout(event.type, checkout, shopOrderId);
+
   const bookingId = checkout.metadata?.booking_id ?? checkout.client_reference_id ?? null;
-  if (!bookingId) return; // Not one of ours (for example a shop payment link).
+  if (!bookingId) return; // Not one of ours.
 
   const order = await getOrder(bookingId);
   if (!order) {
@@ -149,7 +156,10 @@ async function refunded(charge: Stripe.Charge) {
   const intent = typeof charge.payment_intent === "string" ? charge.payment_intent : charge.payment_intent?.id;
   if (!intent) return;
   const order = await getOrderByPaymentIntent(intent);
-  if (!order) return; // Not one of ours (for example a shop payment link).
+  if (!order) {
+    await handleShopRefund(charge, intent);
+    return; // A shop order, or not one of ours.
+  }
   if (charge.livemode !== order.livemode || charge.currency !== order.currency) {
     console.error(`[webhook] charge.refunded for ${order.id} did not match the booking`);
     return;

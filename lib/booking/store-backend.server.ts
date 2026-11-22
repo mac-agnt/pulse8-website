@@ -1,5 +1,6 @@
 import "server-only";
 import type { Order } from "@/lib/booking/store.server";
+import type { ShopOrder } from "@/lib/booking/shop-store.server";
 
 /**
  * Where bookings are kept. Two backends implement this, and every booking rule
@@ -24,6 +25,10 @@ export type StoreTx = {
   /** false when the event id was already claimed */
   claimEvent(eventId: string): Promise<boolean>;
   unclaimEvent(eventId: string): Promise<void>;
+  /** shop orders: kept apart from bookings, so no seat rule ever sees them */
+  getShop(orderId: string): Promise<ShopOrder | undefined>;
+  shopByAttempt(attemptKey: string): Promise<ShopOrder | undefined>;
+  putShop(order: ShopOrder): Promise<void>;
 };
 
 export type StoreReads = {
@@ -32,6 +37,9 @@ export type StoreReads = {
   all(): Promise<Order[]>;
   /** orders that can be holding a seat: pending, processing or paid */
   live(): Promise<Order[]>;
+  getShop(orderId: string): Promise<ShopOrder | undefined>;
+  findShopBy(field: "checkoutSessionId" | "paymentIntentId", value: string): Promise<ShopOrder | undefined>;
+  allShop(): Promise<ShopOrder[]>;
 };
 
 export type StoreBackend = {

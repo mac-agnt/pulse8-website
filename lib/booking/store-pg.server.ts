@@ -2,6 +2,7 @@ import "server-only";
 import { Pool, type PoolClient } from "pg";
 import type { StoreBackend, StoreTx } from "@/lib/booking/store-backend.server";
 import type { Order } from "@/lib/booking/store.server";
+import type { ShopOrder } from "@/lib/booking/shop-store.server";
 
 /**
  * Postgres store, used when BOOKING_DATABASE_URL is set (any hosted Postgres:
@@ -59,6 +60,18 @@ async function ensureSchema(): Promise<void> {
         CREATE INDEX IF NOT EXISTS booking_orders_status ON booking_orders (status);
         CREATE INDEX IF NOT EXISTS booking_orders_checkout ON booking_orders (checkout_session_id);
         CREATE INDEX IF NOT EXISTS booking_orders_intent ON booking_orders (payment_intent_id);
+        CREATE TABLE IF NOT EXISTS shop_orders (
+          id text PRIMARY KEY,
+          attempt_key text NOT NULL,
+          status text NOT NULL,
+          checkout_session_id text,
+          payment_intent_id text,
+          created_at timestamptz NOT NULL,
+          data jsonb NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS shop_orders_attempt ON shop_orders (attempt_key);
+        CREATE INDEX IF NOT EXISTS shop_orders_checkout ON shop_orders (checkout_session_id);
+        CREATE INDEX IF NOT EXISTS shop_orders_intent ON shop_orders (payment_intent_id);
         CREATE TABLE IF NOT EXISTS booking_events (
           id text PRIMARY KEY,
           claimed_at timestamptz NOT NULL DEFAULT now()
@@ -76,9 +89,9 @@ async function ensureSchema(): Promise<void> {
   return schema;
 }
 
-type Row = { data: Order };
+type Row<T = Order> = { data: T };
 
-const orders = (rows: Row[]) => rows.map((row) => row.data);
+const orders = <T = Order>(rows: Row<T>[]) => rows.map((row) => row.data);
 
 function txOver(client: PoolClient): StoreTx {
   return {
@@ -124,12 +137,43 @@ function txOver(client: PoolClient): StoreTx {
     async unclaimEvent(eventId) {
       await client.query("DELETE FROM booking_events WHERE id = $1", [eventId]);
     },
+    async getShop(orderId) {
+      const { rows } = await client.query<Row<ShopOrder>>("SELECT data FROM shop_orders WHERE id = $1", [orderId]);
+      return rows[0]?.data;
+    },
+    async shopByAttempt(attemptKey) {
+      const { rows } = await client.query<Row<ShopOrder>>(
+        "SELECT data FROM shop_orders WHERE attempt_key = $1 ORDER BY created_at DESC LIMIT 1",
+        [attemptKey],
+      );
+      return rows[0]?.data;
+    },
+    async putShop(order) {
+      await client.query(
+        `INSERT INTO shop_orders (id, attempt_key, status, checkout_session_id, payment_intent_id, created_at, data)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (id) DO UPDATE SET
+           status = EXCLUDED.status,
+           checkout_session_id = EXCLUDED.checkout_session_id,
+           payment_intent_id = EXCLUDED.payment_intent_id,
+           data = EXCLUDED.data`,
+        [
+          order.id,
+          order.attemptKey,
+          order.status,
+          order.checkoutSessionId ?? null,
+          order.paymentIntentId ?? null,
+          order.createdAt,
+          JSON.stringify(order),
+        ],
+      );
+    },
   };
 }
 
-async function query(sql: string, params: unknown[] = []): Promise<Order[]> {
+async function query<T = Order>(sql: string, params: unknown[] = []): Promise<T[]> {
   await ensureSchema();
-  const { rows } = await getPool().query<Row>(sql, params);
+  const { rows } = await getPool().query<Row<T>>(sql, params);
   return orders(rows);
 }
 
@@ -159,5 +203,11 @@ export const pgBackend: StoreBackend = {
     all: () => query("SELECT data FROM booking_orders ORDER BY created_at"),
     live: () =>
       query("SELECT data FROM booking_orders WHERE status IN ('pending', 'processing', 'paid')"),
+    getShop: async (orderId) => (await query<ShopOrder>("SELECT data FROM shop_orders WHERE id = $1", [orderId]))[0],
+    findShopBy: async (field, value) => {
+      const column = field === "checkoutSessionId" ? "checkout_session_id" : "payment_intent_id";
+      return (await query<ShopOrder>(`SELECT data FROM shop_orders WHERE ${column} = $1 LIMIT 1`, [value]))[0];
+    },
+    allShop: () => query<ShopOrder>("SELECT data FROM shop_orders ORDER BY created_at"),
   },
 };

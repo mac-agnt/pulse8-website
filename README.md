@@ -28,7 +28,7 @@ app/
   courses/               all courses, online courses band, /courses/<slug> pages
   shop/                  store index and /shop/<category>
   product/[slug]/        product pages, same URL as the old WooCommerce store
-  cart/                  basket and order request
+  cart/                  basket, order form and Stripe return page
   about/  contact/       ported company pages
   policies/              index, cancellation, privacy and cookie policies
   book/                  course dates calendar
@@ -136,9 +136,8 @@ dashboard) and only the booking API reads them.
 | `BOOKING_PAYMENTS_ENABLED=1` | Turns on "Book a place". Off by default: every date offers enquiry. |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Stripe. Test keys only until go-live; a live key also needs `BOOKING_ALLOW_LIVE=1`. |
 | `SITE_URL` (+ optional `SITE_URL_ALLOWLIST`) | Origins Stripe may return customers to. |
-| `BOOKING_STAFF_EMAILS` | Paid-booking notifications. Default `info@pulse8.ie`. |
+| `BOOKING_STAFF_EMAILS` | Paid-booking and shop order notifications. Default `info@pulse8.ie`. |
 | `NEXT_PUBLIC_WHATSAPP_NUMBER` | Digits with country code. Link hidden while unset. |
-| `NEXT_PUBLIC_STUDENT_LOGIN_URL` | Student login in the header. Hidden while unset. |
 | `SCHEDULE_FIXTURES` | `1`/`0` forces the generated sample dates on/off. Default: on in development only. Sample dates never book. |
 
 Stripe webhook endpoint: `https://<site>/api/stripe/webhook`, events
@@ -237,6 +236,51 @@ part refunds, and BL unreachable or not configured. Set
 `BOOKING_CHECK_DATABASE_URL` to a throwaway local Postgres whose name contains
 `test` to run the whole suite again on the Postgres store.
 
+## Shop checkout and student login (November 2026)
+
+The basket's order form now sends real orders. The browser sends only which
+products, options and quantities, and who is ordering; every amount is worked
+out on the server from `lib/shop.ts`.
+
+- **Payments on** (`BOOKING_PAYMENTS_ENABLED=1` and Stripe keys, the same
+  switch as bookings): the customer pays in Stripe Checkout and comes back to
+  `/cart/return`. Only the signed webhook marks the order paid, then the
+  customer and staff are emailed. A payment that doesn't match the order is
+  held for staff review; a full refund in Stripe marks the order refunded.
+- **Payments off** (now): the order goes to staff as a request, with an
+  acknowledgement to the customer, as the old order form intended. The form
+  only reports success once staff have the email.
+- **Delivery** is a flagged placeholder at €0 in `lib/shop-delivery.ts` until
+  Pulse 8 gives their rates. Staff emails say so on every paid order.
+- Shop orders are a separate collection in the same store (`shop_orders` in
+  Postgres), so nothing in the shop can change a booking or its places.
+
+| Piece | Where |
+| --- | --- |
+| Pricing a basket | `lib/shop-pricing.ts` |
+| Delivery charge | `lib/shop-delivery.ts` |
+| Order endpoint | `app/api/shop/checkout/route.ts` |
+| Orders, statuses, email records | `lib/booking/shop-store.server.ts` |
+| Order emails | `lib/booking/shop-notify.server.ts` |
+| Webhook handling | `lib/booking/shop-webhook.server.ts`, called from the Stripe webhook |
+| Return page | `app/cart/return/page.tsx` |
+| Staff: list orders / retry an email | `GET /api/admin/shop-orders`, `POST /api/admin/shop-orders/<ref>/emails` |
+
+**Student login** is a small menu in the header (and its own group in the
+mobile menu), because learners sign in in three places:
+
+| Item | Goes to |
+| --- | --- |
+| Blended learning | `/student-login/blended`, which redirects to `BLENDED_LEARNING_URL` + `/login` (the blended courses section while unset) |
+| Online courses | Videotile's Candidate Login, `https://www.videotilehost.com/pulse8/index.php` |
+| Join a classroom course | `https://www.p8courses.com/` (course ID from the joining email) |
+
+The links live in `lib/site-config.ts` and `components/sections/navMenus.ts`.
+It replaces the hidden `NEXT_PUBLIC_STUDENT_LOGIN_URL` button, which is gone.
+
+Setting up the database and email for production, with prices:
+`docs/go-live-database-email.md`.
+
 ## Before this goes live
 
 1. **Confirm four durations.** `patient-moving-handling-course` (18 hours),
@@ -244,13 +288,13 @@ part refunds, and BL unreachable or not configured. Set
    carry what looks like a copy-paste of the 18-hour First Aid Response entry on
    the current site. They are flagged `unverifiedDuration: true` in
    `lib/data.ts`.
-2. **Email sender.** The quote form now posts to `/api/enquiry`; set
-   `RESEND_API_KEY` and a verified `MAIL_FROM` (see above).
-3. **Wire the shop order form.** `sendOrderRequest` in
-   `components/shop/OrderRequestForm.tsx` waits and then succeeds; the typed
-   order (customer, lines, subtotal) is already assembled for it. The old store
-   took card payments through Stripe, so the likely next step is a Stripe
-   Checkout session from a route handler, in place of the order request.
+2. **Email sender and database.** Set `RESEND_API_KEY`, a verified
+   `MAIL_FROM` and `BOOKING_DATABASE_URL`; steps and prices are in
+   `docs/go-live-database-email.md`.
+3. **Shop delivery charge.** Done apart from the rate: the order form takes
+   payment through Stripe when payments are on, and sends an order request
+   when they are off (see "Shop checkout and student login"). Set the real
+   delivery rates in `lib/shop-delivery.ts`.
 4. **Review the cookie policy.** Sections 1 to 4 and the rights section are the
    old text. The old list of cookies described WordPress, WooCommerce,
    Complianz and Sourcebuster, none of which run here, so it was replaced with

@@ -3,6 +3,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { StoreBackend, StoreTx } from "@/lib/booking/store-backend.server";
 import type { Order } from "@/lib/booking/store.server";
+import type { ShopOrder } from "@/lib/booking/shop-store.server";
 
 /**
  * DEVELOPMENT AND TEST STORE. A JSON file guarded by an in-process lock: every
@@ -16,6 +17,7 @@ import type { Order } from "@/lib/booking/store.server";
 
 type StoreData = {
   orders: Order[];
+  shopOrders: ShopOrder[];
   /** event ids already handled, newest last */
   events: string[];
 };
@@ -32,10 +34,11 @@ async function load(): Promise<StoreData> {
     const parsed = JSON.parse(await readFile(storeFile(), "utf8")) as Partial<StoreData>;
     return {
       orders: Array.isArray(parsed.orders) ? parsed.orders : [],
+      shopOrders: Array.isArray(parsed.shopOrders) ? parsed.shopOrders : [],
       events: Array.isArray(parsed.events) ? parsed.events : [],
     };
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { orders: [], events: [] };
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { orders: [], shopOrders: [], events: [] };
     throw error;
   }
 }
@@ -68,6 +71,13 @@ function txOver(data: StoreData): StoreTx {
     unclaimEvent: async (eventId) => {
       data.events = data.events.filter((id) => id !== eventId);
     },
+    getShop: async (orderId) => data.shopOrders.find((order) => order.id === orderId),
+    shopByAttempt: async (attemptKey) => data.shopOrders.findLast((order) => order.attemptKey === attemptKey),
+    putShop: async (order) => {
+      const index = data.shopOrders.findIndex((item) => item.id === order.id);
+      if (index === -1) data.shopOrders.push(order);
+      else data.shopOrders[index] = order;
+    },
   };
 }
 
@@ -97,5 +107,8 @@ export const fileBackend: StoreBackend = {
       read((data) =>
         data.orders.filter((order) => ["pending", "processing", "paid"].includes(order.status)),
       ),
+    getShop: (orderId) => read((data) => data.shopOrders.find((order) => order.id === orderId)),
+    findShopBy: (field, value) => read((data) => data.shopOrders.find((order) => order[field] === value)),
+    allShop: () => read((data) => [...data.shopOrders]),
   },
 };

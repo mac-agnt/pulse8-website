@@ -5,6 +5,7 @@ import {
   BatteryFull,
   Book,
   Backpack,
+  ChalkboardTeacher,
   Briefcase,
   CalendarBlank,
   FirstAidKit,
@@ -19,13 +20,21 @@ import {
   SignIn,
   Syringe,
 } from "@phosphor-icons/react";
-import { joinCourseUrl } from "@/lib/site-config";
+import { blendedLoginPath, joinCourseUrl, onlineCoursesLoginUrl } from "@/lib/site-config";
 
 /**
  * Menus for the desktop navigation. Shop entries mirror the categories in
  * lib/shop.ts, written out here so the header does not pull the whole product
  * catalogue into the client bundle.
  */
+export type NavEntry = {
+  label: string;
+  description: string;
+  href: string;
+  icon: ElementType;
+  external?: boolean;
+};
+
 export type NavItem = {
   id: number;
   label: string;
@@ -34,13 +43,7 @@ export type NavItem = {
   variant?: "outlined";
   subMenus?: {
     title: string;
-    items: {
-      label: string;
-      description: string;
-      href: string;
-      icon: ElementType;
-      external?: boolean;
-    }[];
+    items: NavEntry[];
   }[];
 };
 
@@ -144,5 +147,33 @@ export const navItems: NavItem[] = [
         ],
       },
     ],
+  },
+];
+
+/**
+ * "Student login" in the header: learners sign in in three places, so it is
+ * one menu rather than one link. Each opens in a new tab, like "Join a course".
+ */
+export const studentLoginItems: NavEntry[] = [
+  {
+    label: "Blended learning",
+    description: "Your online part, from your booking email",
+    href: blendedLoginPath,
+    icon: Laptop,
+    external: true,
+  },
+  {
+    label: "Online courses",
+    description: "Courses bought online",
+    href: onlineCoursesLoginUrl,
+    icon: GraduationCap,
+    external: true,
+  },
+  {
+    label: "Join a classroom course",
+    description: "Enter the course ID from your email",
+    href: joinCourseUrl,
+    icon: ChalkboardTeacher,
+    external: true,
   },
 ];

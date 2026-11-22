@@ -100,7 +100,8 @@ export type Order = {
   blended?: BlendedBooking;
 };
 
-function backend(): StoreBackend {
+/** The storage in use. Shop orders (shop-store.server.ts) share it. */
+export function backend(): StoreBackend {
   return process.env.BOOKING_DATABASE_URL ? pgBackend : fileBackend;
 }
 

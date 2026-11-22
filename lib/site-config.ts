@@ -20,22 +20,18 @@ export const whatsappUrl: string | null =
     : null;
 
 /**
- * Student sign-in. Not confirmed: www.p8courses.com is a "Join a course" page
- * (course ID entry, with a staff sign-in), and the cookie policy mentions a
- * separate Videotile e-learning portal. Set this once Pulse 8 names the one
- * learners should use; the header shows "Student login" only when it is set.
+ * Where learners sign in. There are three, so the header's "Student login"
+ * is a small menu (components/sections/navMenus.ts):
+ *   Blended learning  /student-login/blended, which redirects to
+ *                     BLENDED_LEARNING_URL + /login
+ *   Online courses    the Videotile portal's "Candidate Login" page, where
+ *                     courses bought online are taken
+ *   Classroom course  p8courses.com, which takes the course ID from the
+ *                     joining email
  */
-function safeUrl(value: string | undefined): string | null {
-  if (!value) return null;
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" ? url.toString() : null;
-  } catch {
-    return null;
-  }
-}
+export const blendedLoginPath = "/student-login/blended";
 
-export const studentLoginUrl: string | null = safeUrl(process.env.NEXT_PUBLIC_STUDENT_LOGIN_URL);
+export const onlineCoursesLoginUrl = "https://www.videotilehost.com/pulse8/index.php";
 
 /** The learner "Join a course" page that the old nav item pointed at. */
 export const joinCourseUrl = "https://www.p8courses.com/";

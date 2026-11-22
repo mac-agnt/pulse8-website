@@ -50,6 +50,14 @@ function check(name, condition, detail = "") {
 
 // ---------------------------------------------------------------- Stripe mock
 const mockCalls = [];
+function lineTotal(params) {
+  let total = 0;
+  for (let i = 0; params.has(`line_items[${i}][quantity]`); i += 1) {
+    total +=
+      Number(params.get(`line_items[${i}][price_data][unit_amount]`)) * Number(params.get(`line_items[${i}][quantity]`));
+  }
+  return total;
+}
 const mock = createServer((req, res) => {
   let body = "";
   req.on("data", (chunk) => (body += chunk));
@@ -65,11 +73,12 @@ const mock = createServer((req, res) => {
           object: "checkout.session",
           url: `https://checkout.stripe.test/c/pay/${id}`,
           expires_at: Number(params.get("expires_at")),
-          amount_total:
-            Number(params.get("line_items[0][price_data][unit_amount]")) *
-            Number(params.get("line_items[0][quantity]")),
+          // Stripe totals every line (a shop order has several).
+          amount_total: lineTotal(params),
           currency: params.get("line_items[0][price_data][currency]"),
-          metadata: { booking_id: params.get("metadata[booking_id]") },
+          metadata: params.has("metadata[shop_order_id]")
+            ? { shop_order_id: params.get("metadata[shop_order_id]") }
+            : { booking_id: params.get("metadata[booking_id]") },
         }),
       );
       return;
@@ -565,6 +574,7 @@ async function suite() {
   check("retry endpoint needs admin auth", response.status === 401);
 
   await blendedChecks({ paidOrder, failOrder });
+  await shopChecks();
 }
 
 const page = async (url) => (await fetch(`${BASE}${url}`)).text();
@@ -856,6 +866,225 @@ async function blendedChecks({ paidOrder, failOrder }) {
   check("course-change endpoint closed when unconfigured", response.status === 503);
 }
 
+// ---------------------------------------------------------------- shop and student login
+const shopOrders = async () =>
+  (await fetch(`${BASE}/api/admin/shop-orders`, { headers: adminAuth })).json();
+const shopById = async (id) => (await shopOrders()).find((order) => order.id === id);
+const customer = {
+  name: "Niamh Doyle",
+  email: "niamh.test@example.com",
+  phone: "086 555 0199",
+  organisation: "Check GAA Club",
+  address: "1 Test Road\nDublin 8",
+  eircode: "d08 x2y4",
+  notes: "",
+  consent: true,
+};
+const MINDRAY = "mindray-beneheart-c1a-defibrillator";
+const GLOVES = "nitrile-gloves-100s-medical-grade";
+const basket = [
+  { slug: MINDRAY, quantity: 2 },
+  { slug: GLOVES, option: "M", quantity: 3 },
+];
+const BASKET_TOTAL = 2 * 129500 + 3 * 995;
+const isRedirect = (status) => [303, 307, 308].includes(status);
+
+async function placeShopOrder(extra = {}) {
+  const callsBefore = mockCalls.length;
+  const response = await json("/api/shop/checkout", { attemptKey: attempt(), lines: basket, ...customer, ...extra });
+  const body = await response.json().catch(() => ({}));
+  const call = mockCalls.length > callsBefore ? mockCalls.at(-1) : undefined;
+  const checkoutId = body.url?.split("/").pop();
+  const order = checkoutId ? (await shopOrders()).find((o) => o.checkoutSessionId === checkoutId) : undefined;
+  return { response, body, call, order };
+}
+
+function shopCheckoutEvent(type, order, overrides = {}) {
+  return signedEvent(type, {
+    id: order.checkoutSessionId,
+    payment_status: "paid",
+    amount_total: order.amountTotal,
+    currency: "eur",
+    payment_intent: `pi_test_${order.id}`,
+    metadata: { shop_order_id: order.id },
+    ...overrides,
+  });
+}
+
+async function shopChecks() {
+  console.log("\nStudent login");
+  // The app from the last blended section has BL switched off.
+  let response = await fetch(`${BASE}/student-login/blended`, { redirect: "manual" });
+  check(
+    "BL sign-in falls back to blended courses while BL is unset",
+    isRedirect(response.status) && Boolean(response.headers.get("location")?.endsWith("/courses#blended-learning")),
+  );
+  await stopApp();
+
+  await startApp();
+  response = await fetch(`${BASE}/student-login/blended`, { redirect: "manual" });
+  check("BL sign-in redirects to BL's /login", isRedirect(response.status) && response.headers.get("location") === `${BL_BASE}/login`);
+  const home = await page("/");
+  check("header has the Student login menu", home.includes("Student login") && home.includes("/student-login/blended"));
+  check("menu links the Videotile learner login", home.includes("https://www.videotilehost.com/pulse8/index.php"));
+  check("menu links the classroom join page", home.includes("https://www.p8courses.com/"));
+
+  console.log("\nShop checkout (payments on)");
+  const bookingsBefore = (await orders()).length;
+  const placed = await placeShopOrder({
+    // Prices the browser might send are ignored: only slug, option and quantity count.
+    lines: basket.map((line) => ({ ...line, price: 0.01, unitAmount: 1, lineTotal: 1 })),
+  });
+  check(
+    "shop order starts Stripe Checkout",
+    placed.response.status === 200 && typeof placed.body.url === "string" && placed.call?.path === "/v1/checkout/sessions",
+  );
+  const p = placed.call?.params;
+  check("line 1 priced from the catalogue (1,295.00 x 2)", p?.get("line_items[0][price_data][unit_amount]") === "129500" && p?.get("line_items[0][quantity]") === "2");
+  check("line 2 priced from the catalogue (9.95 x 3)", p?.get("line_items[1][price_data][unit_amount]") === "995" && p?.get("line_items[1][quantity]") === "3");
+  check("option named on the Stripe line", Boolean(p?.get("line_items[1][price_data][product_data][name]")?.includes("(Size: M)")));
+  check("no delivery line while delivery is 0", !p?.has("line_items[2][quantity]"));
+  check("Checkout tagged as a shop order, not a booking", Boolean(p?.has("metadata[shop_order_id]")) && !p?.has("metadata[booking_id]"));
+  check("returns to /cart/return", Boolean(p?.get("success_url")?.startsWith(`${BASE}/cart/return?session_id=`)));
+  const shop = placed.order;
+  check("order recorded pending with the server's total", shop?.status === "pending" && shop?.amountTotal === BASKET_TOTAL && shop?.delivery === 0);
+  check("Eircode tidied", shop?.customer.eircode === "D08 X2Y4");
+  check("no booking created by a shop order", (await orders()).length === bookingsBefore);
+
+  const repeatKey = attempt();
+  const first = await json("/api/shop/checkout", { attemptKey: repeatKey, lines: basket, ...customer });
+  const callsAfterFirst = mockCalls.length;
+  const second = await json("/api/shop/checkout", { attemptKey: repeatKey, lines: basket, ...customer });
+  check("double submit reuses the same Checkout", (await first.json()).url === (await second.json()).url && mockCalls.length === callsAfterFirst);
+
+  const refused = async (name, extra) => {
+    const callsBefore = mockCalls.length;
+    const result = await json("/api/shop/checkout", { attemptKey: attempt(), lines: basket, ...customer, ...extra });
+    check(name, result.status === 400 && mockCalls.length === callsBefore, `status ${result.status}`);
+  };
+  await refused("unknown product refused", { lines: [{ slug: "not-a-product", quantity: 1 }] });
+  await refused("missing size refused", { lines: [{ slug: GLOVES, quantity: 1 }] });
+  await refused("size not on offer refused", { lines: [{ slug: GLOVES, option: "XXL", quantity: 1 }] });
+  await refused("option on a product without options refused", { lines: [{ slug: MINDRAY, option: "M", quantity: 1 }] });
+  await refused("quantity 0 refused", { lines: [{ slug: MINDRAY, quantity: 0 }] });
+  await refused("quantity 100 refused", { lines: [{ slug: MINDRAY, quantity: 100 }] });
+  await refused("fractional quantity refused", { lines: [{ slug: MINDRAY, quantity: 1.5 }] });
+  await refused("empty basket refused", { lines: [] });
+  await refused("bad Eircode refused", { eircode: "12345" });
+  await refused("missing consent refused", { consent: false });
+  await refused("header injection in name refused", { name: "Niamh\r\nBcc: x@example.com" });
+
+  let mailBefore = (await outboxMail()).length;
+  response = await postEvent(shopCheckoutEvent("checkout.session.completed", shop));
+  let order = await shopById(shop.id);
+  let mail = await outboxSince(mailBefore);
+  check("webhook marks the shop order paid", response.status === 200 && order?.status === "paid" && order?.paymentIntentId === `pi_test_${shop.id}`);
+  const toCustomer = mail.find((m) => m.headers.To === customer.email);
+  const toStaff = mail.find((m) => m.headers.To === "info@pulse8.ie");
+  check("customer and staff emailed once each", mail.length === 2 && Boolean(toCustomer) && Boolean(toStaff), `${mail.length} messages`);
+  check(
+    "customer email lists the order",
+    Boolean(toCustomer?.headers.Subject?.includes(shop.id) && toCustomer?.text?.includes("(Size: M)") && toCustomer?.text?.includes("2,619.85")),
+  );
+  check(
+    "staff email replies to the customer and flags the delivery placeholder",
+    toStaff?.headers["Reply-To"] === customer.email && Boolean(toStaff?.headers.Subject?.startsWith("[TEST]")) && Boolean(toStaff?.text?.includes("Placeholder")),
+  );
+  check("no booking changed by the shop payment", (await orders()).length === bookingsBefore);
+
+  mailBefore = (await outboxMail()).length;
+  await postEvent(shopCheckoutEvent("checkout.session.completed", shop));
+  check("a replayed payment sends nothing more", (await outboxMail()).length === mailBefore && (await shopById(shop.id))?.status === "paid");
+
+  const returned = await page(`/cart/return?session_id=${shop.checkoutSessionId}`);
+  check("return page confirms the paid order", returned.includes("Thanks, your order is in") && returned.includes(shop.id));
+  const unknownReturn = await page("/cart/return?session_id=cs_test_madeup123456");
+  check("return page with a made-up id finds nothing", unknownReturn.includes("find that order") && !unknownReturn.includes("your order is in"));
+
+  // Paid, but not the amount we asked for.
+  const off = (await placeShopOrder()).order;
+  mailBefore = (await outboxMail()).length;
+  await postEvent(shopCheckoutEvent("checkout.session.completed", off, { amount_total: 100 }));
+  order = await shopById(off.id);
+  mail = await outboxSince(mailBefore);
+  check("wrong amount held for review, not confirmed", order?.status === "exception");
+  check(
+    "only staff told, with ACTION NEEDED",
+    mail.length === 1 && mail[0].headers.To === "info@pulse8.ie" && mail[0].text.includes("ACTION NEEDED"),
+  );
+
+  const lapsed = (await placeShopOrder()).order;
+  await postEvent(shopCheckoutEvent("checkout.session.expired", lapsed, { payment_status: "unpaid" }));
+  check("expired Checkout closes the order", (await shopById(lapsed.id))?.status === "expired");
+
+  const delayed = (await placeShopOrder()).order;
+  await postEvent(shopCheckoutEvent("checkout.session.completed", delayed, { payment_status: "unpaid" }));
+  check("delayed payment waits as processing", (await shopById(delayed.id))?.status === "processing");
+  await postEvent(shopCheckoutEvent("checkout.session.async_payment_failed", delayed, { payment_status: "unpaid" }));
+  check("failed delayed payment closes the order", (await shopById(delayed.id))?.status === "failed");
+
+  const paidShop = await shopById(shop.id);
+  await postEvent(refundEvent(paidShop, 995));
+  order = await shopById(shop.id);
+  check("part refund recorded, order stays paid", order?.status === "paid" && order?.amountRefunded === 995);
+  await postEvent(refundEvent(paidShop, BASKET_TOTAL));
+  order = await shopById(shop.id);
+  check("full refund marks the order refunded", order?.status === "refunded" && order?.amountRefunded === BASKET_TOTAL);
+  check("no booking changed by the shop refund", (await orders()).length === bookingsBefore);
+
+  response = await postEvent(shopCheckoutEvent("checkout.session.completed", { ...shop, id: "S8-UNKNOWN0" }));
+  check("event for an unknown shop order is ignored", response.status === 200);
+
+  response = await fetch(`${BASE}/api/admin/shop-orders`);
+  check("shop order list needs admin auth", response.status === 401);
+  response = await json(`/api/admin/shop-orders/${shop.id}/emails`, { kind: "staff" });
+  check("shop email retry needs admin auth", response.status === 401);
+  await stopApp();
+
+  console.log("\nShop order requests (payments off)");
+  await startApp({ BOOKING_PAYMENTS_ENABLED: "0" });
+  const callsBefore = mockCalls.length;
+  mailBefore = (await outboxMail()).length;
+  const requestKey = attempt();
+  response = await json("/api/shop/checkout", { attemptKey: requestKey, lines: basket, ...customer });
+  let body = await response.json();
+  order = await shopById(body.reference);
+  mail = await outboxSince(mailBefore);
+  check("order request accepted without Stripe", response.status === 200 && body.requested === true && mockCalls.length === callsBefore);
+  check("request recorded as requested", order?.status === "requested" && order?.mode === "request" && order?.amountTotal === BASKET_TOTAL);
+  check(
+    "staff get the request, customer an acknowledgement",
+    mail.length === 2 &&
+      mail.some((m) => m.headers.Subject.startsWith("Shop order request")) &&
+      mail.some((m) => m.headers.Subject.startsWith("Order request received")),
+  );
+  mailBefore = (await outboxMail()).length;
+  response = await json("/api/shop/checkout", { attemptKey: requestKey, lines: basket, ...customer });
+  body = await response.json();
+  check("double submit reuses the request and sends nothing more", body.reference === order?.id && (await outboxMail()).length === mailBefore);
+  await stopApp();
+
+  await startApp({ BOOKING_PAYMENTS_ENABLED: "0", MAIL_TRANSPORT: "fail" });
+  const failKey = attempt();
+  response = await json("/api/shop/checkout", { attemptKey: failKey, lines: basket, ...customer });
+  body = await response.json();
+  check("request reports failure when staff can't be emailed", response.status === 502 && typeof body.error === "string");
+  await stopApp();
+
+  await startApp({ BOOKING_PAYMENTS_ENABLED: "0" });
+  mailBefore = (await outboxMail()).length;
+  response = await json("/api/shop/checkout", { attemptKey: failKey, lines: basket, ...customer });
+  body = await response.json();
+  order = await shopById(body.reference);
+  check(
+    "resubmitting the failed request delivers it",
+    response.status === 200 && order?.emails.staff.status === "sent" && order?.emails.customer.status === "sent",
+  );
+  check("the retry sent exactly the two missing emails", (await outboxMail()).length === mailBefore + 2);
+  response = await json(`/api/admin/shop-orders/${order?.id}/emails`, { kind: "staff" }, adminAuth);
+  check("staff retry of a sent email sends nothing", response.status === 200 && (await response.json()).alreadySent === true);
+}
+
 // ---------------------------------------------------------------- run, once per store
 const stores = [{ label: "file store", env: {} }];
 if (process.env.BOOKING_CHECK_DATABASE_URL) {
@@ -871,7 +1100,7 @@ if (process.env.BOOKING_CHECK_DATABASE_URL) {
       const { default: pg } = await import("pg");
       const client = new pg.Client({ connectionString: url });
       await client.connect();
-      await client.query("DROP TABLE IF EXISTS booking_orders, booking_events");
+      await client.query("DROP TABLE IF EXISTS booking_orders, shop_orders, booking_events");
       await client.end();
     },
   });

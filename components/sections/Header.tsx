@@ -8,12 +8,12 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/Button";
 import { DropdownNavigation } from "@/components/ui/dropdown-navigation";
 import { MenuToggleIcon } from "@/components/ui/menu-toggle-icon";
-import { navItems } from "@/components/sections/navMenus";
+import { navItems, studentLoginItems } from "@/components/sections/navMenus";
+import { StudentLoginMenu } from "@/components/sections/StudentLoginMenu";
 import { BasketLink } from "@/components/shop/BasketLink";
 import { logo } from "@/lib/brand";
 import { cn } from "@/lib/cn";
 import { contact } from "@/lib/data";
-import { studentLoginUrl } from "@/lib/site-config";
 import { duration, ease } from "@/lib/motion";
 
 /**
@@ -29,8 +29,8 @@ import { duration, ease } from "@/lib/motion";
  * menu button; the page behind it is locked while it is open, and Escape
  * closes it and puts focus back on the button.
  *
- * Student login appears only once its destination is configured (see
- * lib/site-config.ts).
+ * Student login is a small menu of the three places learners sign in
+ * (StudentLoginMenu on desktop, its own group in the mobile sheet).
  */
 export function Header({ overlay = false }: { overlay?: boolean }) {
   const [open, setOpen] = useState(false);
@@ -134,23 +134,7 @@ export function Header({ overlay = false }: { overlay?: boolean }) {
         </nav>
 
         <div className="flex items-center gap-2 md:gap-3 lg:gap-2 xl:gap-3">
-          {studentLoginUrl ? (
-            <a
-              href={studentLoginUrl}
-              aria-label="Student login"
-              title="Student login"
-              className={cn(
-                // Icon only between 1024 and 1279px, where the bar has no room for the words.
-                "hidden size-10 shrink-0 items-center justify-center gap-1.5 rounded-full border text-[0.9375rem] font-medium whitespace-nowrap transition-colors duration-200 lg:inline-flex xl:size-auto xl:rounded-none xl:border-0",
-                onGlass
-                  ? "border-white/25 text-white/85 hover:text-white"
-                  : "border-border text-ink-muted hover:text-ink",
-              )}
-            >
-              <SignIn size={16} weight="bold" />
-              <span className="hidden xl:inline">Student login</span>
-            </a>
-          ) : null}
+          <StudentLoginMenu onGlass={onGlass} />
 
           <a
             href={contact.phoneHref}
@@ -241,17 +225,27 @@ export function Header({ overlay = false }: { overlay?: boolean }) {
                     ) : null}
                   </li>
                 ))}
-                {studentLoginUrl ? (
-                  <li className="border-b border-border-soft py-3">
-                    <a
-                      href={studentLoginUrl}
-                      className="inline-flex items-center gap-2 text-xl font-semibold tracking-[-0.02em] text-ink"
-                    >
-                      <SignIn size={18} weight="bold" />
-                      Student login
-                    </a>
-                  </li>
-                ) : null}
+                <li className="border-b border-border-soft py-3">
+                  <p className="inline-flex items-center gap-2 text-xl font-semibold tracking-[-0.02em] text-ink">
+                    <SignIn size={18} weight="bold" />
+                    Student login
+                  </p>
+                  <ul className="mt-3 flex flex-col gap-3">
+                    {studentLoginItems.map((entry) => (
+                      <li key={entry.label}>
+                        <a
+                          href={entry.href}
+                          onClick={() => setOpen(false)}
+                          {...(entry.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                          className="block leading-5"
+                        >
+                          <span className="block text-[0.9375rem] text-ink">{entry.label}</span>
+                          <span className="block text-[0.8125rem] text-ink-faint">{entry.description}</span>
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </li>
               </ul>
 
               <div className="mt-auto flex flex-col gap-3">

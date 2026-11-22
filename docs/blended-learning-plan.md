@@ -97,6 +97,7 @@ Anything unsigned or stale gets `401`. BL env `WEBSITE_WEBHOOK_URL` points at it
 | W5 | **Tell BL when paid.** After `markPaid`, send `booking.confirmed` (B) signed. Delivery is recorded on the order and retried on its own like the emails (a failed send never undoes a paid booking). Add a CRON_SECRET-protected retry route and a staff retry, and register the cron in `vercel.json`. | Cases: success, BL 5xx then retry, duplicate. |
 | W6 | **Refunds.** Handle Stripe `charge.refunded`. A full refund sends `booking.refunded`, marks the order refunded and frees the places. A partial refund sends a staff review email only. Add the event to the README's webhook list. | Cases: full, partial, replay. |
 | W7 | **Receive course changes** (C). | Cases: good signature revalidates, bad or stale gets 401. |
+| W8 | **Student login menu** (dropped 17 Nov, back on 22 Nov at Matthew's call, after Tom's 29 Oct request). One "Student login" header item opening a small menu in the nav's style: Blended learning (BL's `/login`, via `/student-login/blended`), Online courses (Videotile's Candidate Login, `videotilehost.com/pulse8/index.php`), Join a classroom course (p8courses.com). Also in the mobile menu. Replaces the hidden `NEXT_PUBLIC_STUDENT_LOGIN_URL` button. | Done 22 Nov: `check:booking` cases for the redirect and links; browser check at desktop, 1,100 px and 375 px. |
 | W9 | **Hand-off for Mac.** A README section "Blended learning (November 2026)" in the same style as his "Booking, payments and email" section, a one-line pointer in `AGENTS.md`, and `docs/handoff-blended-learning.md` (see "Tone" below). | Committed with the work. |
 
 Website env added: `BLENDED_LEARNING_URL` (`https://blendedlearning-ebon.vercel.app`, and `https://blendedlearning.pulse8.ie` once its DNS is live) and `BLENDED_LEARNING_SECRET`.
@@ -104,8 +105,11 @@ Website env added: `BLENDED_LEARNING_URL` (`https://blendedlearning-ebon.vercel.
 ## Not in scope (stays as it is)
 - Live payments. They stay off until Pulse 8's own Stripe account is connected (`BOOKING_PAYMENTS_ENABLED`, keys,
   `BOOKING_ALLOW_LIVE`). Until then every date shows "Enquire", exactly as now, so pushing to `main` is safe.
-- Pointing pulse8.ie at the new site, real course prices for classroom courses, the shop order form,
-  Resend sender set-up, and any change to Richard's Pulse8 app.
+- Pointing pulse8.ie at the new site, real course prices for classroom courses, and any change to
+  Richard's Pulse8 app.
+- Added after the first round (22 Nov): the shop order form now sends real orders (Stripe Checkout when
+  payments are on, an order request when off), and the database and Resend set-up is written up in
+  `docs/go-live-database-email.md`. Creating those accounts is still Pulse 8's step.
 
 ## Acceptance (Claude, after both lanes)
 One cross-app run, locally: BL local stack plus the website with the Stripe mock and file store.

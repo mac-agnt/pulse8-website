@@ -11,6 +11,7 @@ import { QuantityStepper } from "@/components/shop/QuantityStepper";
 import { useBasket, useBasketReady, type BasketLine } from "@/lib/basket";
 import { duration, ease } from "@/lib/motion";
 import { formatMoney } from "@/lib/shop";
+import { deliveryCents } from "@/lib/shop-delivery";
 
 /** Placeholder in the shape of the filled basket, until the saved one is read. */
 function BasketSkeleton() {
@@ -128,13 +129,18 @@ function LineRow({
  *
  * Before hydration the basket always reads as empty, so this shows a skeleton
  * until the saved basket is in, rather than flashing "empty" at someone who
- * has items. Lines on the left, a sticky summary with the order request form
- * on the right. Every change is announced through one polite live region.
+ * has items. Lines on the left, a sticky summary with the order form on the
+ * right. Every change is announced through one polite live region.
+ *
+ * `payments` (from the server) says whether the order is paid now in Stripe
+ * Checkout or sent to Pulse 8 as a request; the summary and button follow it.
  */
-export function BasketView() {
+export function BasketView({ payments }: { payments: boolean }) {
   const ready = useBasketReady();
   const { lines, count, subtotal, setQuantity, remove } = useBasket();
-  const [sent, setSent] = useState(false);
+  const [sent, setSent] = useState<string | null>(null);
+  // Same rule as the server (lib/shop-delivery.ts); the server's figure is what is charged.
+  const delivery = deliveryCents(Math.round(subtotal * 100)) / 100;
   const [announcement, setAnnouncement] = useState("");
 
   // The live region stays first and mounted across every state, so the
@@ -149,7 +155,7 @@ export function BasketView() {
     return (
       <>
         {live}
-        <OrderReceived />
+        <OrderReceived reference={sent} />
       </>
     );
   }
@@ -224,19 +230,29 @@ export function BasketView() {
                 <dt className="text-ink-muted">Items</dt>
                 <dd className="figure text-ink">{count}</dd>
               </div>
+              {payments ? (
+                <div className="flex items-baseline justify-between gap-4">
+                  <dt className="text-ink-muted">Delivery</dt>
+                  <dd className="figure text-ink">{delivery === 0 ? "Free" : formatMoney(delivery)}</dd>
+                </div>
+              ) : null}
               <div className="flex items-baseline justify-between gap-4 border-t border-border-soft pt-3">
-                <dt className="font-medium text-ink">Subtotal</dt>
-                <dd className="figure text-2xl font-semibold text-ink">{formatMoney(subtotal)}</dd>
+                <dt className="font-medium text-ink">{payments ? "Total" : "Subtotal"}</dt>
+                <dd className="figure text-2xl font-semibold text-ink">
+                  {formatMoney(payments ? subtotal + delivery : subtotal)}
+                </dd>
               </div>
             </dl>
 
             <p className="mt-4 text-[0.875rem] leading-relaxed text-ink-muted">
-              Delivery and payment are confirmed by email before anything ships.
+              {payments
+                ? "You pay securely with Stripe on the next step. We deliver within Ireland and email your receipt."
+                : "Delivery and payment are confirmed by email before anything ships."}
             </p>
 
             <div className="mt-7 border-t border-border-soft pt-7">
               <h3 className="mb-5 text-base font-semibold">Your details</h3>
-              <OrderRequestForm lines={lines} subtotal={subtotal} onSent={() => setSent(true)} />
+              <OrderRequestForm lines={lines} payments={payments} onSent={(reference) => setSent(reference)} />
             </div>
           </div>
         </aside>

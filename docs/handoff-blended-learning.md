@@ -34,13 +34,33 @@ plan it was built to.
   (`POST /api/admin/bookings/<ref>/blended-learning`, behind your admin auth),
   always with the same event id.
 
+## Added 22 November: shop checkout and student login
+
+- **Shop orders are real.** Your order form now posts to
+  `/api/shop/checkout`. With payments off (now) it sends staff an order
+  request and the customer an acknowledgement; with payments on it goes
+  through Stripe Checkout and your webhook, like a booking, and returns to
+  `/cart/return`. Prices come from `lib/shop.ts` on the server only.
+  Delivery is a flagged €0 placeholder in `lib/shop-delivery.ts` until Pulse 8
+  give their rates.
+- **Student login is back**, as a small menu in the header in the same style
+  as your dropdowns: Blended learning (BL's sign-in, via
+  `/student-login/blended`), Online courses (Videotile's Candidate Login) and
+  Join a classroom course (p8courses.com). The mobile menu lists the same
+  three. Your hidden `NEXT_PUBLIC_STUDENT_LOGIN_URL` button is replaced.
+- **Go-live prep** for the database and email, with prices and the DNS
+  records to expect: `docs/go-live-database-email.md`.
+
+The README section "Shop checkout and student login (November 2026)" has the
+file map.
+
 ## Checks
 
 `npm run lint && npm run typecheck && npm run build && npm run check:booking`
-all pass. `check:booking` runs 192 checks (your original set plus the blended
-ones, against a mock BL) and 47 unit tests first. With
-`BOOKING_CHECK_DATABASE_URL` set to a throwaway Postgres, it runs the whole
-suite again on the Postgres store: 384 of 384 passed. One small change to your
+all pass. `check:booking` runs 246 checks (your original set, the blended
+ones against a mock BL, and the shop and student login ones) and 47 unit tests
+first. With `BOOKING_CHECK_DATABASE_URL` set to a throwaway Postgres, it runs
+the whole suite again on the Postgres store: 492 of 492 passed on 22 November. One small change to your
 script: it now starts Next through `node` so it runs on Windows as well.
 
 ## Environment
@@ -58,9 +78,9 @@ BL already sends its course-change messages to
 
 ## Go-live steps (yours and Pulse 8's call)
 
-1. **Hosted Postgres.** Create one (Supabase, Neon or another provider through
-   Vercel) and set `BOOKING_DATABASE_URL` before payments go on. The tables
-   create themselves on first use.
+1. **Hosted Postgres and email.** Create the database and the Resend sender
+   before payments go on; `docs/go-live-database-email.md` has the steps and
+   the recommended free plans. The tables create themselves on first use.
 2. **`CRON_SECRET`.** Set any long random value; Vercel sends it with the cron.
    The cron runs daily (`vercel.json`) to suit the Hobby plan; on Pro it can
    run hourly.
