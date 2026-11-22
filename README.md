@@ -220,7 +220,8 @@ How it fits together:
 | `BLENDED_LEARNING_URL` | BL's base URL. Blended dates are hidden while unset. |
 | `BLENDED_LEARNING_SECRET` | Shared signing key; the same value as `BOOKING_WEBHOOK_SECRET` in BL. |
 | `BLENDED_LEARNING_COURSE_LINKS` | Optional. `website-slug=<BL course id>,...` links a course here to a BL course. The dashboard's `blendedCourseId` does the same. |
-| `BOOKING_DATABASE_URL` | Postgres for bookings. Tables are created on first use. Unset: the JSON file. |
+| `BOOKING_DATABASE_URL` | Postgres for bookings and shop orders: in production the BL Supabase project's Transaction pooler string as `website_app` (`docs/sql/website-db-role.sql`). Tables are created on first use in schema `website`, with RLS on. Unset: the JSON file. |
+| `BOOKING_DATABASE_CA` | Optional. The database's CA certificate (PEM), so TLS also verifies the server. |
 | `CRON_SECRET` | Vercel sends it to the cron. Unset: the cron refuses every call. |
 
 BL sends course changes to `https://<site>/api/integrations/blended-learning`

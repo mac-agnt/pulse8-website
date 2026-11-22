@@ -1085,13 +1085,78 @@ async function shopChecks() {
   check("staff retry of a sent email sends nothing", response.status === 200 && (await response.json()).alreadySent === true);
 }
 
+/**
+ * Where the Postgres store put its tables, and who can read them. Customers'
+ * names and addresses must never be reachable through Supabase's REST API:
+ * the tables live in `website` (not `public`), have RLS on with no policies,
+ * and Supabase's API roles hold no rights on them or the schema.
+ */
+async function privacyChecks(url) {
+  console.log("\nPostgres: tables private");
+  const { default: pg } = await import("pg");
+  const client = new pg.Client({ connectionString: url });
+  await client.connect();
+  try {
+    const TABLES = ["booking_orders", "shop_orders", "booking_events"];
+    const { rows } = await client.query(
+      `SELECT n.nspname AS schema, c.relname AS name, c.relrowsecurity AS rls
+         FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE c.relkind = 'r' AND c.relname = ANY($1)`,
+      [TABLES],
+    );
+    check("all three tables are in schema website", TABLES.every((name) => rows.some((r) => r.name === name && r.schema === "website")));
+    check("none of them in public or anywhere else", rows.every((r) => r.schema === "website"));
+    check("row level security on for each", rows.length === 3 && rows.every((r) => r.rls === true));
+    const policies = await client.query("SELECT count(*)::int AS n FROM pg_policies WHERE schemaname = 'website'");
+    check("no RLS policies (nothing is allowed through)", policies.rows[0].n === 0);
+
+    const roles = (await client.query("SELECT rolname FROM pg_roles WHERE rolname = ANY($1)", [["anon", "authenticated", "service_role"]])).rows.map((r) => r.rolname);
+    if (!roles.includes("anon")) {
+      console.log("  (no Supabase roles in this database: anon checks skipped. Run against the supabase/postgres image to include them.)");
+      return;
+    }
+    for (const role of roles) {
+      const priv = await client.query(
+        `SELECT has_schema_privilege($1, 'website', 'USAGE') AS usage,
+                bool_or(has_table_privilege($1, 'website.' || t, 'SELECT,INSERT,UPDATE,DELETE')) AS any_table
+           FROM unnest($2::text[]) AS t`,
+        [role, TABLES],
+      );
+      check(`${role} cannot use schema website`, priv.rows[0].usage === false);
+      check(`${role} has no rights on the tables`, priv.rows[0].any_table === false);
+    }
+    // And for real: as anon, a read fails (needs the connecting role to be able to SET ROLE anon).
+    try {
+      await client.query("BEGIN");
+      await client.query("SET LOCAL ROLE anon");
+      let denied = false;
+      try {
+        await client.query("SELECT count(*) FROM website.booking_orders");
+      } catch (error) {
+        denied = /permission denied/i.test(error.message);
+      }
+      check("a read as anon is refused", denied);
+    } catch {
+      console.log("  (this login cannot SET ROLE anon: live read check skipped, privilege checks above cover it)");
+    } finally {
+      await client.query("ROLLBACK").catch(() => undefined);
+    }
+  } finally {
+    await client.end();
+  }
+}
+
 // ---------------------------------------------------------------- run, once per store
 const stores = [{ label: "file store", env: {} }];
 if (process.env.BOOKING_CHECK_DATABASE_URL) {
   const url = process.env.BOOKING_CHECK_DATABASE_URL;
-  // Its tables are dropped: never point this at a database that matters.
+  // Its tables are dropped: never point this at a database that matters, and
+  // never at a hosted Supabase project (production lives in BL's project).
   if (!/test/i.test(new URL(url).pathname)) {
     throw new Error('BOOKING_CHECK_DATABASE_URL must name a throwaway database whose name contains "test"');
+  }
+  if (/supabase\.(co|com)$/i.test(new URL(url).hostname)) {
+    throw new Error("BOOKING_CHECK_DATABASE_URL points at a hosted Supabase project. Use a local throwaway database.");
   }
   stores.push({
     label: "Postgres store",
@@ -1100,9 +1165,11 @@ if (process.env.BOOKING_CHECK_DATABASE_URL) {
       const { default: pg } = await import("pg");
       const client = new pg.Client({ connectionString: url });
       await client.connect();
-      await client.query("DROP TABLE IF EXISTS booking_orders, shop_orders, booking_events");
+      // Only the tables: the schema and the website_app role stay, as in production.
+      await client.query("DROP TABLE IF EXISTS website.booking_orders, website.shop_orders, website.booking_events");
       await client.end();
     },
+    verify: () => privacyChecks(url),
   });
 } else {
   console.log("Postgres store: skipped. Set BOOKING_CHECK_DATABASE_URL to a throwaway local database to run it too.");
@@ -1120,6 +1187,7 @@ try {
     storeEnv = store.env;
     try {
       await suite();
+      await store.verify?.();
     } catch (error) {
       failures.push(`[${store.label}] crashed: ${error.message}`);
       console.error(error);

@@ -1,9 +1,9 @@
 # Go-live: database and email
 
-Prepared 22 November 2026. Nothing here has been created yet: each step needs
-an account, so Pulse 8 (or whoever holds their logins) does it, or says who
-may. Prices are as published on 22 November 2026, in US dollars as the pages
-show them.
+Prepared 22 November 2026, updated the same day when Matthew chose the
+Blended Learning Supabase project for the database. Nothing here has been
+created yet: Matthew runs the SQL and sets the Vercel variables. Prices are as
+published on 22 November 2026, in US dollars as the pages show them.
 
 The website needs both before payments go on in production:
 
@@ -15,44 +15,69 @@ The website needs both before payments go on in production:
   shop order emails, staff notifications and the enquiry form all send
   through it. Without it production refuses to send rather than pretending.
 
-## Database: Neon, free plan, through the Vercel Marketplace
+## Database: the Pulse 8 Blended Learning Supabase project
 
-Recommended: **Neon Free**, region **AWS Europe (London), `aws-eu-west-2`**
-(closest to Ireland; Neon has no Irish region. Frankfurt, `aws-eu-central-1`,
-also works). The region cannot be changed after creation.
+Decided by Matthew on 22 November 2026: the website keeps its bookings and
+shop orders in the **existing Pulse 8 Blended Learning Supabase project**. No
+new account and no extra cost. That project is in daily use, so the free
+plan's pause after a week of inactivity doesn't apply.
 
-| | Neon Free | Neon Launch | Supabase Free | Supabase Pro |
-| --- | --- | --- | --- | --- |
-| Price | $0 | pay as you go, about $15/month for a small database | $0 | from $25/month |
-| Storage | 1 GB per project | $0.35/GB-month | 500 MB | 8 GB |
-| Idle | sleeps after 5 min, wakes on the next request | sleep can be turned off | **paused after 1 week idle** | not paused |
-| Limit that bites | 100 compute-hours a month | none at this size | 2 active projects | none at this size |
+**Kept apart from Blended Learning, and private.** The tables hold customers'
+names, emails and delivery addresses, and Supabase publishes its `public`
+schema through a REST API. So the website's three tables (`booking_orders`,
+`shop_orders`, `booking_events`) live in their own schema, `website`:
 
-Why Neon Free: the site's data is a few thousand small rows, well under 1 GB,
-and the traffic is light enough to stay inside 100 compute-hours. Supabase's
-free plan pauses after a quiet week, which would break bookings, and Pulse 8
-Blended Learning already uses one of the two free Supabase projects. Vercel's
-own "Vercel Postgres" no longer exists; Neon is one of the providers on the
-Vercel Marketplace that replaced it.
+- `website` is **not** one of Supabase's exposed schemas. Leave it out of
+  Settings > API > Exposed schemas.
+- Every table has row level security on with no policies, and Supabase's API
+  roles (`anon`, `authenticated`, `service_role`) have no rights on the schema
+  or its tables. Even if `website` were exposed by mistake, the API would
+  return nothing.
+- The website connects as its own login, `website_app`, which can only use
+  the `website` schema. It can't read or change Blended Learning's tables.
+- The website's code names every table in full (`website.booking_orders`), so
+  nothing depends on a search path.
 
-Cost to watch: the first request after 5 idle minutes waits for the database
-to wake (usually under a second). If that, or the compute-hour limit, ever
-matters, move to Launch (no minimum, about $15/month at this size).
+`npm run check:booking` tests all of this against a local copy of Supabase's
+Postgres (10 privacy checks on top of the 246 booking and shop checks). It
+drops its tables between runs, so it refuses any hosted Supabase address:
+never point it at the Blended Learning project.
 
-Steps (needs the Vercel project owner):
+### Matthew's steps
 
-1. Vercel dashboard > pulse8-website > Storage > Create > Neon. Choose the
-   Free plan and London (`aws-eu-west-2`).
-2. Connect it to the project for Production (and Preview, with its own branch
-   if wanted). Vercel adds `DATABASE_URL` and related variables.
-3. Add `BOOKING_DATABASE_URL` with the same value as the pooled
-   `DATABASE_URL` (the site reads only `BOOKING_DATABASE_URL`). Redeploy.
-4. First booking or shop order creates the tables `booking_orders`,
-   `shop_orders` and `booking_events`.
+1. **Create the role.** Open `docs/sql/website-db-role.sql`. In the Supabase
+   dashboard for the Blended Learning project, open SQL Editor and paste the
+   script in. Replace the password placeholder with a long random password
+   (letters and digits only) from your password manager, and run it. It
+   refuses to run with the placeholder. The last result should show
+   `website_app` true and the other three roles false. Don't save the real
+   password in the repo.
+2. **Get the connection string.** Click Connect > **Transaction pooler**
+   (port 6543, IPv4: what Vercel needs). It looks like
+   `postgresql://postgres.<project-ref>:[YOUR-PASSWORD]@aws-0-<region>.pooler.supabase.com:6543/postgres`.
+   Change the user from `postgres.<project-ref>` to
+   `website_app.<project-ref>` and put the step 1 password in place of
+   `[YOUR-PASSWORD]`.
+3. **Set it in Vercel.** pulse8-website > Settings > Environment Variables:
+   `BOOKING_DATABASE_URL` = that string, marked **Sensitive**, for
+   Production. A `?sslmode=require` on the end is fine either way: the
+   website always uses TLS to a hosted database.
+4. **Optional, stricter TLS.** Supabase > Database settings > SSL
+   Configuration > download the CA certificate, and set its contents as
+   `BOOKING_DATABASE_CA` (Sensitive). With it, the website also checks it is
+   talking to Supabase's server. Without it, the connection is still
+   encrypted.
+5. **Redeploy.** The first booking or shop order creates the three tables in
+   `website`, with row level security on.
 
-Before trusting it: `npm run check:booking` with `BOOKING_CHECK_DATABASE_URL`
-pointing at a **throwaway** database whose name contains `test` (the run drops
-its tables). Never point that at the production database.
+To check afterwards: Table Editor > schema `website` shows the three tables
+(you see them as `postgres`). Settings > API > Exposed schemas should still
+list only what Blended Learning uses.
+
+Pooler notes for whoever changes the code: transaction mode keeps no session
+state and no named prepared statements. The store uses neither (only
+transaction-scoped advisory locks, plain query strings) and keeps at most 3
+connections per instance.
 
 ## Email: Resend, free plan, from pulse8.ie
 
@@ -66,11 +91,17 @@ The free plan is enough to start: a booking sends two emails, a shop order
 two. The 100-a-day cap only matters on a very busy day, and a failed send is
 recorded and can be retried from the admin endpoints, never lost.
 
-Ask first: the p8courses platform already sends with Resend. If Pulse 8 (or
-Richard) already has a Resend account with `pulse8.ie` verified, use that
-account and skip the DNS step: create an API key there for the website.
+**Pulse 8 already has a Resend account** (info@pulse8.ie, used by the
+p8courses platform), and Richard has sent Matthew an API key. Matthew is
+checking whether `pulse8.ie` is already verified there:
 
-Otherwise, steps (needs a Resend sign-up and the Blacknight DNS login):
+- **If it is verified:** skip steps 1 to 4. Ideally create a separate API key
+  for the website in that account (Sending access, `pulse8.ie` only), so it
+  can be revoked without touching p8courses. Richard's key also works. Then
+  do step 5. Keys go only into Vercel (Sensitive), never into the repo or a
+  chat.
+- **If it isn't:** do the steps below in that same account. No new sign-up
+  is needed, only the Blacknight DNS login.
 
 1. Resend > Domains > Add domain `pulse8.ie`, region **Ireland (eu-west-1)**.
    The region sets where mail is sent from; Resend keeps account data and
@@ -95,9 +126,9 @@ keep the website's sending reputation apart from staff email. That is the
 cleaner option if Pulse 8 is happy for the From address to read
 `bookings@mail.pulse8.ie`; verify that subdomain instead in step 1.
 
-## Still to confirm with Pulse 8
+## Still to confirm
 
 - **Delivery charge** for shop orders. Delivery is a flagged placeholder at €0
   in `lib/shop-delivery.ts` until Tom gives the real rates.
-- Who owns the Vercel project and can add the database integration.
-- Whether a Resend account for pulse8.ie already exists.
+- Whether `pulse8.ie` is already verified in Pulse 8's Resend account
+  (Matthew is checking).

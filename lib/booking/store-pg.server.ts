@@ -3,10 +3,27 @@ import { Pool, type PoolClient } from "pg";
 import type { StoreBackend, StoreTx } from "@/lib/booking/store-backend.server";
 import type { Order } from "@/lib/booking/store.server";
 import type { ShopOrder } from "@/lib/booking/shop-store.server";
+import { poolConfig } from "@/lib/booking/pg-config";
 
 /**
- * Postgres store, used when BOOKING_DATABASE_URL is set (any hosted Postgres:
- * Neon, Supabase, RDS). The tables are created on first use.
+ * Postgres store, used when BOOKING_DATABASE_URL is set. In production that
+ * is the Pulse 8 Blended Learning Supabase project, through its Supavisor
+ * transaction pooler (port 6543), as the limited `website_app` role that
+ * docs/sql/website-db-role.sql creates. Any Postgres works.
+ *
+ * Privacy. The tables hold customers' names, emails and addresses, and
+ * Supabase serves its `public` schema over a REST API. So they live in their
+ * own schema, `website`, which is not one of Supabase's exposed schemas, and
+ * every table name below is written out in full (no search_path). As a second
+ * guard, each table has row level security on with no policies, and `anon`,
+ * `authenticated` and `service_role` hold nothing on them: if `website` were
+ * ever exposed, the API would still return nothing. The tables are created on
+ * first use; the owner (`website_app`) bypasses its own RLS, nobody else does.
+ *
+ * Pooler. Transaction mode keeps no session state between transactions and
+ * no named prepared statements, so: no SET, no session advisory locks (only
+ * pg_advisory_xact_lock inside a transaction), and every query is a plain
+ * string, which node-pg sends as an unnamed statement. Pool kept small.
  *
  * Every write transaction takes one transaction-scoped advisory lock first, so
  * writes run one at a time across every instance, exactly like the file
@@ -25,11 +42,17 @@ const SCHEMA_LOCK = 80_418_002;
 let pool: Pool | null = null;
 let schema: Promise<void> | null = null;
 
+/** The schema the website's tables live in. Never one Supabase exposes. */
+const SCHEMA = "website";
+const ORDERS = `${SCHEMA}.booking_orders`;
+const SHOP = `${SCHEMA}.shop_orders`;
+const EVENTS = `${SCHEMA}.booking_events`;
+
 function getPool(): Pool {
   if (!pool) {
     pool = new Pool({
-      connectionString: process.env.BOOKING_DATABASE_URL,
-      // Serverless: few connections per instance, released quickly.
+      ...poolConfig(process.env.BOOKING_DATABASE_URL ?? "", process.env.BOOKING_DATABASE_CA),
+      // Serverless behind a pooler: a few connections per instance, released quickly.
       max: 3,
       idleTimeoutMillis: 10_000,
       connectionTimeoutMillis: 10_000,
@@ -46,8 +69,12 @@ async function ensureSchema(): Promise<void> {
     try {
       await client.query("BEGIN");
       await client.query("SELECT pg_advisory_xact_lock($1)", [SCHEMA_LOCK]);
+      // CREATE SCHEMA IF NOT EXISTS still needs CREATE on the database, which
+      // website_app does not have (the role script makes the schema), so ask first.
+      const exists = await client.query("SELECT 1 FROM pg_namespace WHERE nspname = $1", [SCHEMA]);
+      if (exists.rowCount === 0) await client.query(`CREATE SCHEMA ${SCHEMA}`);
       await client.query(`
-        CREATE TABLE IF NOT EXISTS booking_orders (
+        CREATE TABLE IF NOT EXISTS ${ORDERS} (
           id text PRIMARY KEY,
           session_id text NOT NULL,
           status text NOT NULL,
@@ -56,11 +83,11 @@ async function ensureSchema(): Promise<void> {
           created_at timestamptz NOT NULL,
           data jsonb NOT NULL
         );
-        CREATE INDEX IF NOT EXISTS booking_orders_session ON booking_orders (session_id);
-        CREATE INDEX IF NOT EXISTS booking_orders_status ON booking_orders (status);
-        CREATE INDEX IF NOT EXISTS booking_orders_checkout ON booking_orders (checkout_session_id);
-        CREATE INDEX IF NOT EXISTS booking_orders_intent ON booking_orders (payment_intent_id);
-        CREATE TABLE IF NOT EXISTS shop_orders (
+        CREATE INDEX IF NOT EXISTS booking_orders_session ON ${ORDERS} (session_id);
+        CREATE INDEX IF NOT EXISTS booking_orders_status ON ${ORDERS} (status);
+        CREATE INDEX IF NOT EXISTS booking_orders_checkout ON ${ORDERS} (checkout_session_id);
+        CREATE INDEX IF NOT EXISTS booking_orders_intent ON ${ORDERS} (payment_intent_id);
+        CREATE TABLE IF NOT EXISTS ${SHOP} (
           id text PRIMARY KEY,
           attempt_key text NOT NULL,
           status text NOT NULL,
@@ -69,13 +96,35 @@ async function ensureSchema(): Promise<void> {
           created_at timestamptz NOT NULL,
           data jsonb NOT NULL
         );
-        CREATE INDEX IF NOT EXISTS shop_orders_attempt ON shop_orders (attempt_key);
-        CREATE INDEX IF NOT EXISTS shop_orders_checkout ON shop_orders (checkout_session_id);
-        CREATE INDEX IF NOT EXISTS shop_orders_intent ON shop_orders (payment_intent_id);
-        CREATE TABLE IF NOT EXISTS booking_events (
+        CREATE INDEX IF NOT EXISTS shop_orders_attempt ON ${SHOP} (attempt_key);
+        CREATE INDEX IF NOT EXISTS shop_orders_checkout ON ${SHOP} (checkout_session_id);
+        CREATE INDEX IF NOT EXISTS shop_orders_intent ON ${SHOP} (payment_intent_id);
+        CREATE TABLE IF NOT EXISTS ${EVENTS} (
           id text PRIMARY KEY,
           claimed_at timestamptz NOT NULL DEFAULT now()
         );
+        ALTER TABLE ${ORDERS} ENABLE ROW LEVEL SECURITY;
+        ALTER TABLE ${SHOP} ENABLE ROW LEVEL SECURITY;
+        ALTER TABLE ${EVENTS} ENABLE ROW LEVEL SECURITY;
+      `);
+      // Supabase's API roles get nothing here, even if a default grant ever
+      // gives them something. Skipped where the roles don't exist (plain
+      // Postgres). The schema itself is only revoked by its owner.
+      await client.query(`
+        DO $$
+        DECLARE r text;
+        BEGIN
+          FOREACH r IN ARRAY ARRAY['anon', 'authenticated', 'service_role'] LOOP
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) THEN
+              EXECUTE format('REVOKE ALL ON ALL TABLES IN SCHEMA ${SCHEMA} FROM %I', r);
+              EXECUTE format('REVOKE ALL ON ALL SEQUENCES IN SCHEMA ${SCHEMA} FROM %I', r);
+              IF (SELECT nspowner FROM pg_namespace WHERE nspname = '${SCHEMA}') =
+                 (SELECT oid FROM pg_roles WHERE rolname = current_user) THEN
+                EXECUTE format('REVOKE ALL ON SCHEMA ${SCHEMA} FROM %I', r);
+              END IF;
+            END IF;
+          END LOOP;
+        END $$;
       `);
       await client.query("COMMIT");
     } catch (error) {
@@ -96,19 +145,19 @@ const orders = <T = Order>(rows: Row<T>[]) => rows.map((row) => row.data);
 function txOver(client: PoolClient): StoreTx {
   return {
     async get(orderId) {
-      const { rows } = await client.query<Row>("SELECT data FROM booking_orders WHERE id = $1", [orderId]);
+      const { rows } = await client.query<Row>(`SELECT data FROM ${ORDERS} WHERE id = $1`, [orderId]);
       return rows[0]?.data;
     },
     async bySession(sessionId) {
       const { rows } = await client.query<Row>(
-        "SELECT data FROM booking_orders WHERE session_id = $1 ORDER BY created_at",
+        `SELECT data FROM ${ORDERS} WHERE session_id = $1 ORDER BY created_at`,
         [sessionId],
       );
       return orders(rows);
     },
     async put(order) {
       await client.query(
-        `INSERT INTO booking_orders (id, session_id, status, checkout_session_id, payment_intent_id, created_at, data)
+        `INSERT INTO ${ORDERS} (id, session_id, status, checkout_session_id, payment_intent_id, created_at, data)
          VALUES ($1, $2, $3, $4, $5, $6, $7)
          ON CONFLICT (id) DO UPDATE SET
            session_id = EXCLUDED.session_id,
@@ -129,28 +178,28 @@ function txOver(client: PoolClient): StoreTx {
     },
     async claimEvent(eventId) {
       const { rowCount } = await client.query(
-        "INSERT INTO booking_events (id) VALUES ($1) ON CONFLICT (id) DO NOTHING",
+        `INSERT INTO ${EVENTS} (id) VALUES ($1) ON CONFLICT (id) DO NOTHING`,
         [eventId],
       );
       return rowCount === 1;
     },
     async unclaimEvent(eventId) {
-      await client.query("DELETE FROM booking_events WHERE id = $1", [eventId]);
+      await client.query(`DELETE FROM ${EVENTS} WHERE id = $1`, [eventId]);
     },
     async getShop(orderId) {
-      const { rows } = await client.query<Row<ShopOrder>>("SELECT data FROM shop_orders WHERE id = $1", [orderId]);
+      const { rows } = await client.query<Row<ShopOrder>>(`SELECT data FROM ${SHOP} WHERE id = $1`, [orderId]);
       return rows[0]?.data;
     },
     async shopByAttempt(attemptKey) {
       const { rows } = await client.query<Row<ShopOrder>>(
-        "SELECT data FROM shop_orders WHERE attempt_key = $1 ORDER BY created_at DESC LIMIT 1",
+        `SELECT data FROM ${SHOP} WHERE attempt_key = $1 ORDER BY created_at DESC LIMIT 1`,
         [attemptKey],
       );
       return rows[0]?.data;
     },
     async putShop(order) {
       await client.query(
-        `INSERT INTO shop_orders (id, attempt_key, status, checkout_session_id, payment_intent_id, created_at, data)
+        `INSERT INTO ${SHOP} (id, attempt_key, status, checkout_session_id, payment_intent_id, created_at, data)
          VALUES ($1, $2, $3, $4, $5, $6, $7)
          ON CONFLICT (id) DO UPDATE SET
            status = EXCLUDED.status,
@@ -195,19 +244,19 @@ export const pgBackend: StoreBackend = {
     }
   },
   reads: {
-    get: async (orderId) => (await query("SELECT data FROM booking_orders WHERE id = $1", [orderId]))[0],
+    get: async (orderId) => (await query(`SELECT data FROM ${ORDERS} WHERE id = $1`, [orderId]))[0],
     findBy: async (field, value) => {
       const column = field === "checkoutSessionId" ? "checkout_session_id" : "payment_intent_id";
-      return (await query(`SELECT data FROM booking_orders WHERE ${column} = $1 LIMIT 1`, [value]))[0];
+      return (await query(`SELECT data FROM ${ORDERS} WHERE ${column} = $1 LIMIT 1`, [value]))[0];
     },
-    all: () => query("SELECT data FROM booking_orders ORDER BY created_at"),
+    all: () => query(`SELECT data FROM ${ORDERS} ORDER BY created_at`),
     live: () =>
-      query("SELECT data FROM booking_orders WHERE status IN ('pending', 'processing', 'paid')"),
-    getShop: async (orderId) => (await query<ShopOrder>("SELECT data FROM shop_orders WHERE id = $1", [orderId]))[0],
+      query(`SELECT data FROM ${ORDERS} WHERE status IN ('pending', 'processing', 'paid')`),
+    getShop: async (orderId) => (await query<ShopOrder>(`SELECT data FROM ${SHOP} WHERE id = $1`, [orderId]))[0],
     findShopBy: async (field, value) => {
       const column = field === "checkoutSessionId" ? "checkout_session_id" : "payment_intent_id";
-      return (await query<ShopOrder>(`SELECT data FROM shop_orders WHERE ${column} = $1 LIMIT 1`, [value]))[0];
+      return (await query<ShopOrder>(`SELECT data FROM ${SHOP} WHERE ${column} = $1 LIMIT 1`, [value]))[0];
     },
-    allShop: () => query<ShopOrder>("SELECT data FROM shop_orders ORDER BY created_at"),
+    allShop: () => query<ShopOrder>(`SELECT data FROM ${SHOP} ORDER BY created_at`),
   },
 };

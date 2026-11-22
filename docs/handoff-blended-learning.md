@@ -28,7 +28,8 @@ plan it was built to.
   one review email and changes nothing else.
 - **Durable store.** `store.server.ts` keeps its functions and gains a
   Postgres back end (`BOOKING_DATABASE_URL`) beside your JSON file, which stays
-  the default for development.
+  the default for development. In production that is the BL Supabase project,
+  in its own schema `website`, which Supabase's API can't reach.
 - **Nothing lost if BL is down.** Blended dates hide and the rest of the site
   works. A paid booking BL didn't receive is retried by a daily cron or by staff
   (`POST /api/admin/bookings/<ref>/blended-learning`, behind your admin auth),
@@ -60,7 +61,12 @@ file map.
 all pass. `check:booking` runs 246 checks (your original set, the blended
 ones against a mock BL, and the shop and student login ones) and 47 unit tests
 first. With `BOOKING_CHECK_DATABASE_URL` set to a throwaway Postgres, it runs
-the whole suite again on the Postgres store: 492 of 492 passed on 22 November. One small change to your
+the whole suite again on the Postgres store, plus 10 checks that the tables
+sit in `website` with row level security on and that Supabase's `anon`,
+`authenticated` and `service_role` can't touch them: 502 of 502 passed on
+22 November, against a local copy of Supabase's Postgres with the app logged in
+as `website_app`. It refuses hosted Supabase addresses, since it drops its
+tables. One small change to your
 script: it now starts Next through `node` so it runs on Windows as well.
 
 ## Environment
@@ -70,7 +76,8 @@ script: it now starts Next through `node` so it runs on Windows as well.
 | `BLENDED_LEARNING_URL` | Set in Vercel production: `https://blendedlearning-ebon.vercel.app`. Switch to `https://blendedlearning.pulse8.ie` once that domain is live (the old URL keeps working). |
 | `BLENDED_LEARNING_SECRET` | Set in Vercel production (Sensitive). The same value as BL's `BOOKING_WEBHOOK_SECRET`. |
 | `BLENDED_LEARNING_COURSE_LINKS` | Not set. `first-aid-response-blended=<BL course id>` links your FAR blended page to its BL course. |
-| `BOOKING_DATABASE_URL` | Not set. Hosted Postgres for bookings. |
+| `BOOKING_DATABASE_URL` | Not set. The BL Supabase project's Transaction pooler string, user `website_app` (see go-live step 1). |
+| `BOOKING_DATABASE_CA` | Optional. Supabase's CA certificate (PEM), to verify the database server as well as encrypt. |
 | `CRON_SECRET` | Not set. Until it is, the retry cron refuses every call. |
 
 BL already sends its course-change messages to
@@ -78,9 +85,15 @@ BL already sends its course-change messages to
 
 ## Go-live steps (yours and Pulse 8's call)
 
-1. **Hosted Postgres and email.** Create the database and the Resend sender
-   before payments go on; `docs/go-live-database-email.md` has the steps and
-   the recommended free plans. The tables create themselves on first use.
+1. **Database and email.** The database is the Blended Learning Supabase
+   project (Matthew's call, 22 November), in its own private schema `website`
+   as the limited role `website_app`: run `docs/sql/website-db-role.sql` in
+   Supabase's SQL editor, take the Transaction pooler string (port 6543) with
+   the `website_app` user, set it as `BOOKING_DATABASE_URL` (Sensitive) in
+   Vercel and redeploy. The tables create themselves on first use, with row
+   level security on and nothing granted to Supabase's API roles. Email uses
+   Pulse 8's existing Resend account. Full steps:
+   `docs/go-live-database-email.md`.
 2. **`CRON_SECRET`.** Set any long random value; Vercel sends it with the cron.
    The cron runs daily (`vercel.json`) to suit the Hobby plan; on Pro it can
    run hourly.
