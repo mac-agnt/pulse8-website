@@ -27,7 +27,8 @@ import { ease } from "@/lib/motion";
 type DeliveryFilter = "All" | Delivery;
 type View = "list" | "calendar";
 
-const deliveryOptions: DeliveryFilter[] = ["All", "Classroom", "Blended", "Online"];
+/** Online courses have no dates (they start any time on the e-learning portal), so no Online filter. */
+const deliveryOptions: DeliveryFilter[] = ["All", "Classroom", "Blended"];
 
 const control =
   "h-10 rounded-full border border-border bg-surface px-4 text-[0.875rem] text-ink transition-colors duration-200 hover:border-ink-faint";
@@ -632,6 +633,14 @@ export function BookingCalendar({
           Clear filters
         </button>
       ) : null}
+
+      <p className="text-[0.8125rem] text-ink-muted">
+        Online courses have no dates: you can{" "}
+        <Link href="/courses#online" className="font-medium text-ink underline underline-offset-4">
+          start any time
+        </Link>
+        .
+      </p>
 
       <div role="group" aria-label="View" className="inline-flex w-fit rounded-full border border-border p-1 md:ml-auto">
         {(

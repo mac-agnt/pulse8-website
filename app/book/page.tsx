@@ -24,7 +24,10 @@ export default async function BookPage({
 }) {
   const { course, format, session, cancelled } = await searchParams;
   const [sessions, content] = await Promise.all([getPublicSessions(), readPublicContent()]);
+  // Online courses are bought and taken on the e-learning portal and never have dates,
+  // so they are not offered as a filter here (the page points to them instead).
   const courses = content.courses
+    .filter((item) => item.delivery !== "Online")
     .map(({ slug, title }) => ({ slug, title }))
     .sort((a, b) => a.title.localeCompare(b.title));
 
