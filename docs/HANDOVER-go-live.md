@@ -157,9 +157,19 @@ URL already redirects to its new page (`next.config.ts`).
 | `ADMIN_PASSWORD` | check | the staff dashboard `/admin` needs it |
 | `NEXT_PUBLIC_WHATSAPP_NUMBER` | optional | digits with country code |
 
-Check before go-live (not yet confirmed): how the `/admin` dashboard saves
-content on Vercel (`lib/content.server.ts`; Vercel's file system is
-read-only), so staff edits to prices and copy actually persist.
+**Known gap: the `/admin` dashboard can't save on Vercel.** It writes
+`content/site-content.json` to disk (`lib/content.server.ts`), and Vercel's
+file system is read-only and per-instance, so edits to copy, courses, course
+prices and dates won't persist in production. Fix before staff rely on it:
+store that content in Supabase schema `website` (same pattern and privacy
+rules as `lib/booking/store-pg.server.ts`).
+
+There is also **no admin for shop products**: all 49 live in `lib/shop.ts`
+(photos in `/public/shop`), so adding or repricing a product is a code change
+and a deploy. Matthew is considering a Products panel in `/admin` (add, edit,
+hide, price, category, size options, photo upload), reading from Supabase;
+`lib/shop-pricing.ts` would then price from the database. Build the content
+storage fix first, then this, only once Matthew says go.
 
 ## Still waiting on Pulse 8 / Matthew
 
