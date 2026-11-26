@@ -134,10 +134,10 @@ export default async function CoursesPage() {
                     <span className="mt-2 inline-flex items-center gap-1.5 text-[0.8125rem] text-ink-faint">
                       <Clock size={14} weight="bold" />
                       {course.duration ? (
-                        <>
-                          <span className="figure">{course.duration}</span>
-                          <span aria-hidden="true">,</span>
-                        </>
+                        // The comma sits inside the same span so the row's gap doesn't put a space before it.
+                        <span>
+                          <span className="figure">{course.duration}</span>,
+                        </span>
                       ) : null}
                       <span>{course.delivery.toLowerCase()}</span>
                     </span>

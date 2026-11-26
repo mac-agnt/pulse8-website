@@ -82,7 +82,9 @@ export function Header({ overlay = false }: { overlay?: boolean }) {
       <div
         className={cn(
           "mx-auto flex h-14 w-full items-center justify-between gap-4 rounded-full border py-2 pr-2 pl-4 transition-[max-width,background-color,border-color,box-shadow] duration-300 ease-out md:h-16 md:pl-5",
-          scrolled ? "max-w-[1080px]" : "max-w-[1240px]",
+          // The condensed pill must still hold the nav, Student login, Book a course and the
+          // basket (the phone number drops out when scrolled), or they spill past its edge.
+          scrolled ? "max-w-[1160px]" : "max-w-[1240px]",
           onGlass
             ? "border-transparent bg-transparent"
             : "border-border bg-surface/85 shadow-[0_1px_3px_rgb(15_23_42/0.06)] backdrop-blur-xl",
@@ -139,7 +141,9 @@ export function Header({ overlay = false }: { overlay?: boolean }) {
           <a
             href={contact.phoneHref}
             className={cn(
-              "hidden items-center gap-2 text-[0.9375rem] font-medium transition-colors duration-200 2xl:inline-flex",
+              "hidden shrink-0 items-center gap-2 text-[0.9375rem] font-medium whitespace-nowrap transition-colors duration-200",
+              // Only in the full-width bar on very wide screens; the condensed pill has no room for it.
+              !scrolled && "2xl:inline-flex",
               onGlass ? "text-white" : "text-ink",
             )}
           >
@@ -147,7 +151,7 @@ export function Header({ overlay = false }: { overlay?: boolean }) {
             <span className="figure">{contact.phone}</span>
           </a>
 
-          <Button href="/book" className="hidden rounded-full sm:inline-flex">
+          <Button href="/book" className="hidden shrink-0 rounded-full whitespace-nowrap sm:inline-flex">
             <CalendarBlank size={16} weight="bold" />
             Book a course
           </Button>
