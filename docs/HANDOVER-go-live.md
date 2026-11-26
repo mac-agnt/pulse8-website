@@ -142,6 +142,27 @@ URL already redirects to its new page (`next.config.ts`).
 5. Check: home, `/book`, `/shop`, an old WordPress URL (it should redirect),
    student login links, and that email still flows.
 
+## Entering prices (Matthew is collecting them from Tom on 26 Nov)
+
+Stripe needs no products: each checkout sends its amount from these places.
+
+| What | Where to enter it | Who |
+| --- | --- | --- |
+| Blended learning courses (including PHECC First Aid Response blended, once it is linked to its BL course with `BLENDED_LEARNING_COURSE_LINKS`) | BL's admin, the price on each course. The website reads it at checkout. | Matthew or Tom, no code |
+| Classroom courses (19) | `lib/course-prices.server.ts`, euro per person, e.g. `"cardiac-first-response": 95`. **All current values are placeholders.** A course with no entry falls back to enquiry. | Agent edits, runs checks, pushes |
+| Shop products | `lib/shop.ts`. Already the real prices from the old shop; change only what Tom asks. | Agent |
+| Shop delivery | `lib/shop-delivery.ts` (`deliveryCents`), then set `DELIVERY_CONFIRMED = true`. Currently a flagged €0. | Agent |
+| Online (Videotile) courses | Priced on Videotile, not on this site. | n/a |
+
+The `/admin` Courses panel has prices too, but its saves don't persist on
+Vercel yet (see the known gap below), so use the file for now.
+
+Questions for Tom: do prices include VAT (some training is VAT-exempt)? Any
+group or company rate (online booking takes 1 to 6 places; bigger groups
+enquire)? Delivery charge: flat, free over an amount, Ireland only? A price for
+each blended course? Matthew will send the list as "course: €price, VAT
+included yes or no".
+
 ## Environment variables (Vercel, pulse8-website)
 
 | Variable | State on 26 Nov | Set to |
