@@ -171,6 +171,13 @@ hide, price, category, size options, photo upload), reading from Supabase;
 `lib/shop-pricing.ts` would then price from the database. Build the content
 storage fix first, then this, only once Matthew says go.
 
+**Decided 26 Nov (Matthew): WooCommerce is retired.** The new site replaces
+the old WordPress/WooCommerce shop completely; nothing is connected to it.
+Before pulse8.ie is pointed at Vercel, export past orders and customers from
+WooCommerce for Pulse 8's records (needs the WordPress login). Today's focus is
+getting Blended Learning fully live; the admin below is built over the
+following days, then Tom gets his own admin login.
+
 **Full admin, wanted end to end (Matthew, 26 Nov; after go-live, in the
 background).** In priority order:
 1. Saving that persists (Supabase), and staff logins per person (Supabase
