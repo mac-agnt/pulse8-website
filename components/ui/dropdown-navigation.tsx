@@ -175,7 +175,8 @@ export function DropdownNavigation({
                 }}
                 className={cn(
                   "relative flex items-center gap-1.5 py-2 text-[0.9375rem] transition-colors duration-200",
-                  item.subMenus ? "pr-1 pl-3.5" : "px-3.5",
+                  // Tighter between 1024 and 1279px so the whole bar fits inside the pill there.
+                  item.subMenus ? "pr-1 pl-2.5 xl:pl-3.5" : "px-2.5 xl:px-3.5",
                   outlined
                     ? onGlass
                       ? "font-medium text-white"
