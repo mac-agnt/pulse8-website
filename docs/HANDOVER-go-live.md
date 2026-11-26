@@ -171,6 +171,29 @@ hide, price, category, size options, photo upload), reading from Supabase;
 `lib/shop-pricing.ts` would then price from the database. Build the content
 storage fix first, then this, only once Matthew says go.
 
+**Full admin, wanted end to end (Matthew, 26 Nov; after go-live, in the
+background).** In priority order:
+1. Saving that persists (Supabase), and staff logins per person (Supabase
+   Auth) in place of the one shared `ADMIN_PASSWORD`, with a log of who
+   changed what.
+2. Orders: shop orders and order requests in a list; confirm, mark
+   dispatched (tracking, emails the customer), cancel, refund through Stripe,
+   notes, resend emails.
+3. Bookings: per course date, attendee list (print / CSV), cancel and refund,
+   move to another date, add a manual booking (phone, invoice or PO), mark
+   attended.
+4. Products: the Products panel above, plus stock / out of stock and editable
+   delivery rates.
+5. Course dates and prices (the existing Courses and Calendar panels, made to
+   persist), closing a date, private group dates.
+6. Enquiries: stored with a status (new, quoted, booked) instead of email only.
+7. Discount codes (Stripe promotion codes) and VAT receipts or invoices for
+   companies.
+8. Reports: sales by month, bookings by course, CSV export for accounts.
+9. Site settings: announcement bar, contact details, staff notification
+   emails, payments on or off; editing FAQs, testimonials and images.
+Blended learning keeps its own admin (BL repo); link to it from here.
+
 ## Still waiting on Pulse 8 / Matthew
 
 - Real classroom course prices (`lib/course-prices.server.ts`).
