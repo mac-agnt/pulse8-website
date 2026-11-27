@@ -8,8 +8,8 @@ import { AdminButton, Badge, Notice } from "@/components/admin/ui";
 import { adminApi, formatWhen } from "@/components/admin/api";
 
 const ROLE_HINT: Record<StaffRole, string> = {
-  owner: "Everything, including adding and removing logins.",
-  staff: "Prices, dates, courses and site copy. Can't manage logins.",
+  owner: "Everything, including Finance (payments and revenue) and adding or removing logins.",
+  staff: "Prices, dates, courses and site copy. Can't see Finance or any payment amounts, or manage logins.",
 };
 
 function AddPerson({ onDone }: { onDone: (message: string) => void }) {
