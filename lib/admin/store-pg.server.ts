@@ -25,7 +25,7 @@ import {
  *   admin_docs           content, course dates and prices: one row per document
  *   staff_users          staff logins (scrypt password hashes, never passwords)
  *   staff_sessions       signed-in browsers, by sha256 of the cookie
- *   staff_login_tokens   one-time email sign-in links, by sha256 of the token
+ *   staff_login_tokens   email sign-in links (reusable until they expire), by sha256 of the token
  *   staff_login_attempts recent attempts, for rate limiting; keys are hashed
  *   admin_audit          who changed what, and when
  *
@@ -361,8 +361,9 @@ export const pgAdminStore: AdminStore = {
     ]);
   },
   async takeLoginToken(tokenHash, now) {
+    // Links keep working until they expire, so the same link can be clicked again.
     const { rows } = await run<{ user_id: string; expires_at: Date }>(
-      `DELETE FROM ${TOKENS} WHERE token_hash = $1 RETURNING user_id, expires_at`,
+      `SELECT user_id, expires_at FROM ${TOKENS} WHERE token_hash = $1`,
       [tokenHash],
     );
     const row = rows[0];

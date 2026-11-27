@@ -10,7 +10,7 @@ import { clientKey } from "@/lib/validate.server";
 /**
  * Staff sign-in for /admin.
  *
- * Each person has their own login: email and password, or a one-time link
+ * Each person has their own login: email and password, or a sign-in link
  * emailed to them. A sign-in sets an httpOnly cookie holding a random token;
  * only its sha256 is stored, so the sessions table can't be replayed. Sessions
  * last 30 days at most and end after 7 days unused. Passwords are hashed with
@@ -241,7 +241,7 @@ export async function checkPassword(email: string, password: string): Promise<St
   return ok && user && user.active ? user : null;
 }
 
-/** A one-time sign-in link token for this user; returns the raw token for the email. */
+/** A sign-in link token for this user; returns the raw token for the email. */
 export async function issueLoginToken(user: StaffUser, minutes: number = LINK_MINUTES): Promise<string> {
   const token = randomBytes(32).toString("base64url");
   const expires = new Date(Date.now() + minutes * 60_000).toISOString();

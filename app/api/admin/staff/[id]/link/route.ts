@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * A one-time sign-in link for someone, lasting 7 days. Owners only. Emailed to
+ * A sign-in link for someone, lasting 7 days. Owners only. Emailed to
  * them, or with `{ "copy": true }` returned to the owner to send themselves.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {

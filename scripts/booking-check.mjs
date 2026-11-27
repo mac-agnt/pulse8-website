@@ -1165,7 +1165,7 @@ async function adminChecks() {
   response = await json("/api/admin/auth/link/verify", { token: copiedToken });
   check("the copied link signs that person in", response.status === 200 && sessionCookie(response).length > 20);
   response = await json("/api/admin/auth/link/verify", { token: copiedToken });
-  check("the copied link works once", response.status !== 200);
+  check("the copied link works again", response.status === 200);
   response = await fetch(`${BASE}/api/admin/prices`, { headers: staffAuth });
   const prices = await response.json();
   check("staff can open prices", response.status === 200 && prices.classroom.some((c) => c.slug === "cardiac-first-response" && c.price === 95));

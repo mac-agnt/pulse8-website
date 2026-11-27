@@ -165,7 +165,8 @@ export const fileAdminStore: AdminStore = {
   takeLoginToken: (tokenHash, now) =>
     change((data) => {
       const token = data.tokens.find((item) => item.tokenHash === tokenHash);
-      data.tokens = data.tokens.filter((item) => item.tokenHash !== tokenHash);
+      // Links keep working until they expire, so the same link can be clicked again.
+      data.tokens = data.tokens.filter((item) => Date.parse(item.expiresAt) > Date.parse(now));
       return token && Date.parse(token.expiresAt) > Date.parse(now) ? token.userId : undefined;
     }),
 
