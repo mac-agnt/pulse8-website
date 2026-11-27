@@ -149,13 +149,13 @@ Stripe needs no products: each checkout sends its amount from these places.
 | What | Where to enter it | Who |
 | --- | --- | --- |
 | Blended learning courses (including PHECC First Aid Response blended, once it is linked to its BL course with `BLENDED_LEARNING_COURSE_LINKS`) | BL's admin, the price on each course. The website reads it at checkout. | Matthew or Tom, no code |
-| Classroom courses (19) | `lib/course-prices.server.ts`, euro per person, e.g. `"cardiac-first-response": 95`. **All current values are placeholders.** A course with no entry falls back to enquiry. | Agent edits, runs checks, pushes |
-| Shop products | `lib/shop.ts`. Already the real prices from the old shop; change only what Tom asks. | Agent |
-| Shop delivery | `lib/shop-delivery.ts` (`deliveryCents`), then set `DELIVERY_CONFIRMED = true`. Currently a flagged €0. | Agent |
+| Courses Pulse 8 runs (classroom and blended) | `/admin` > Prices. Blank means Enquire. **Imported values are placeholders.** | Tom, no code |
+| Shop products | `/admin` > Prices > Shop products (imported from `lib/shop.ts`, the real prices). | Tom, no code |
+| Shop delivery | `/admin` > Prices > Delivery and VAT. Flagged €0 until saved there. | Tom, no code |
 | Online (Videotile) courses | Priced on Videotile, not on this site. | n/a |
 
-The `/admin` Courses panel has prices too, but its saves don't persist on
-Vercel yet (see the known gap below), so use the file for now.
+Everything in this table except BL is now entered in `/admin` (see
+`docs/admin-guide.md`).
 
 Questions for Tom: do prices include VAT (some training is VAT-exempt)? Any
 group or company rate (online booking takes 1 to 6 places; bigger groups
@@ -175,15 +175,16 @@ included yes or no".
 | `CRON_SECRET` | unset | step 3 |
 | `BOOKING_PAYMENTS_ENABLED`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `BOOKING_ALLOW_LIVE` | unset | step 4 |
 | `SITE_URL`, `SITE_URL_ALLOWLIST` | check | step 4, then 5.3 |
-| `ADMIN_PASSWORD` | check | the staff dashboard `/admin` needs it |
+| `ADMIN_PASSWORD` | unset | set once, so Matthew can create the first owner login at `/admin/login` (see `docs/admin-guide.md`) |
 | `NEXT_PUBLIC_WHATSAPP_NUMBER` | optional | digits with country code |
 
-**Known gap: the `/admin` dashboard can't save on Vercel.** It writes
-`content/site-content.json` to disk (`lib/content.server.ts`), and Vercel's
-file system is read-only and per-instance, so edits to copy, courses, course
-prices and dates won't persist in production. Fix before staff rely on it:
-store that content in Supabase schema `website` (same pattern and privacy
-rules as `lib/booking/store-pg.server.ts`).
+**Admin, stage 1 done (27 Nov 2026).** `/admin` now saves to Postgres schema
+`website` (same privacy rules as the booking tables; the current content and
+placeholder prices were imported on first use), with per-person staff logins
+(owner/staff, password or emailed link, rate limited) and an activity log.
+Tom sets classroom course prices, shop prices, delivery and the VAT line in
+Prices, and adds, edits and closes dates in Course dates. How to give Tom his
+login: `docs/admin-guide.md`.
 
 There is also **no admin for shop products**: all 49 live in `lib/shop.ts`
 (photos in `/public/shop`), so adding or repricing a product is a code change

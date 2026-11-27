@@ -20,7 +20,7 @@ function slugify(title: string): string {
 }
 
 /**
- * Course copy editor.
+ * Course copy editor. Prices are set in the Prices panel, not here.
  *
  * List on the left, one course open on the right. Every field writes straight
  * into the draft, so the list reflects a rename as it is typed.
@@ -67,7 +67,6 @@ export function CoursesPanel({
       title: "New course",
       blurb: "One or two lines on who the course is for and what it covers.",
       duration: "3 hours",
-      price: 95,
       delivery: "Classroom",
       image: "/courses/basic-first-aid.webp",
     };
@@ -122,7 +121,7 @@ export function CoursesPanel({
                   {course.title}
                 </span>
                 <span className="figure block text-[0.6875rem] text-ink-faint">
-                  {course.delivery} · {course.price !== undefined ? `€${course.price}` : "no price"}
+                  {course.delivery}
                   {course.status === "draft" ? " · draft" : ""}
                 </span>
               </span>
@@ -187,14 +186,6 @@ export function CoursesPanel({
                   <TextInput
                     value={active.duration ?? ""}
                     onChange={(event) => patch({ duration: event.target.value })}
-                  />
-                </Field>
-                <Field label="Price per person" hint="Euro. Used for online payment only, never shown on the site">
-                  <TextInput
-                    type="number"
-                    min={0}
-                    value={active.price ?? ""}
-                    onChange={(event) => patch({ price: Number(event.target.value) || 0 })}
                   />
                 </Field>
                 <Field label="Delivery">
@@ -281,7 +272,7 @@ export function CoursesPanel({
                   {active.blurb}
                 </p>
                 <p className="figure mt-4 text-[0.8125rem] text-white/55">
-                  {[active.duration, active.delivery, active.price !== undefined ? `€${active.price}` : null]
+                  {[active.duration, active.delivery]
                     .filter(Boolean)
                     .join(" · ")}
                 </p>

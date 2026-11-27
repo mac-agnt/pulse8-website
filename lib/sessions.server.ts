@@ -1,10 +1,11 @@
 import "server-only";
-import { readContent } from "@/lib/content.server";
+import { readContent, readContentForDisplay } from "@/lib/content.server";
 import { paymentConfig } from "@/lib/booking/config.server";
 import { seatsTakenBySession } from "@/lib/booking/store.server";
 import { blendedCatalogue } from "@/lib/blended/feed.server";
 import { BLENDED_SESSION_PREFIX, type BlendedSession } from "@/lib/blended/map";
 import { isPublished, type Course } from "@/lib/data";
+import type { ExtraSession } from "@/lib/content";
 import {
   buildSchedule,
   compareSessions,
@@ -48,8 +49,15 @@ function actionFor(session: Session, unitAmountCents: number | null, canPay: boo
   return "book";
 }
 
-function rateCents(course: Course | undefined): number | null {
-  return course && typeof course.price === "number" && course.price > 0 ? Math.round(course.price * 100) : null;
+/**
+ * Cents per person for one of Pulse 8's own dates: the date's own price when
+ * staff set one, otherwise the course price. Null means no online booking.
+ */
+function rateCents(course: Course | undefined, extra?: ExtraSession): number | null {
+  if (!course) return null;
+  const override = extra?.priceOverride;
+  const euro = typeof override === "number" && override > 0 ? override : course.price;
+  return typeof euro === "number" && euro > 0 ? Math.round(euro * 100) : null;
 }
 
 /** A BL day as a plain session: BL's own id stays server-side. */
@@ -64,7 +72,7 @@ function asSession({ blSessionId: _id, ...session }: BlendedSession): Session {
  * start, and each with its next step decided here rather than in the browser.
  */
 export async function getPublicSessions(now: Date = new Date()): Promise<PublicSession[]> {
-  const content = await readContent();
+  const content = await readContentForDisplay();
   const courses = content.courses.filter(isPublished);
   const bySlug = new Map(courses.map((course) => [course.slug, course]));
   const canPay = paymentConfig() !== null;
@@ -75,9 +83,10 @@ export async function getPublicSessions(now: Date = new Date()): Promise<PublicS
     blendedCatalogue(courses),
   ]);
 
+  const extras = new Map(content.extraSessions.map((extra) => [extra.id, extra]));
   const own = sessions
     .filter((session) => bySlug.has(session.courseSlug))
-    .map((session) => ({ session, cents: rateCents(bySlug.get(session.courseSlug)) }));
+    .map((session) => ({ session, cents: rateCents(bySlug.get(session.courseSlug), extras.get(session.id)) }));
   // BL days are priced by BL, linked website course or not.
   const blended = catalogue.ok
     ? catalogue.courses.flatMap((course) =>
@@ -139,7 +148,7 @@ export async function getBookableSession(sessionId: string, now: Date = new Date
   if (!session || session.sample || !isUpcoming(session, now)) return null;
 
   const course = courses.find((item) => item.slug === session.courseSlug);
-  const cents = rateCents(course);
+  const cents = rateCents(course, content.extraSessions.find((extra) => extra.id === sessionId));
   if (!course || cents === null) return null;
 
   return { session, course, unitAmountCents: cents };
@@ -160,7 +169,8 @@ export async function releasedSeats(sessionId: string): Promise<number | null> {
     return day ? day.seatsLeft : null;
   }
 
-  const session = expandExtraSessions(content.extraSessions, courses).find(
+  // A date closed while someone was paying still counts: their booking lands.
+  const session = expandExtraSessions(content.extraSessions, courses, { includeClosed: true }).find(
     (item) => item.id === sessionId,
   );
   return session ? session.seatsLeft : null;

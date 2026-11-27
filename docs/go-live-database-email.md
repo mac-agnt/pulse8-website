@@ -129,6 +129,6 @@ cleaner option if Pulse 8 is happy for the From address to read
 ## Still to confirm
 
 - **Delivery charge** for shop orders. Delivery is a flagged placeholder at €0
-  in `lib/shop-delivery.ts` until Tom gives the real rates.
+  until Tom sets the real rates in `/admin` > Prices.
 - Whether `pulse8.ie` is already verified in Pulse 8's Resend account
   (Matthew is checking).

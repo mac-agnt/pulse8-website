@@ -1,47 +1,89 @@
 import "server-only";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
-import path from "node:path";
-import { defaultContent, mergeContent, type SiteContent } from "@/lib/content";
 import { defaultCoursePrices } from "@/lib/course-prices.server";
 import { blendedCatalogue } from "@/lib/blended/feed.server";
 import { isPublished, toPublicCourse, type PublicCourse } from "@/lib/data";
+import type { SiteContent } from "@/lib/content";
+import { adminStore } from "@/lib/admin/store.server";
+import { seedDocs } from "@/lib/admin/seed.server";
+import type { PricesDoc, StoredDocs } from "@/lib/admin/types";
+import { defaultShopPriceList, type ShopPriceList } from "@/lib/shop-pricing";
 
 /**
  * Content storage.
  *
- * A JSON file on disk, not a database: the dashboard is a single-editor tool
- * and the site is small enough that a file is the honest shape for it. Works
- * under `next dev` and on any node host with a writable filesystem. On a
- * read-only filesystem (Vercel and other serverless hosts) the write throws
- * and the API reports that saving is unavailable; the site itself keeps
- * rendering from whatever file shipped with the build, or the defaults.
+ * Everything staff edit in /admin lives in the admin store
+ * (lib/admin/store.server.ts): Postgres schema `website` in production, a
+ * JSON file in development. It is kept as a few documents (copy, courses,
+ * dates, prices) and put back together here into the one SiteContent shape
+ * the site has always rendered from.
  */
 
-// SITE_CONTENT_FILE lets a test run use its own content without touching the repo copy.
-const FILE = process.env.SITE_CONTENT_FILE ?? path.join(process.cwd(), "content", "site-content.json");
+/** A course's price: the Prices panel's figure (null there means Enquire), else the old placeholder. */
+function coursePrice(prices: PricesDoc, slug: string): number | undefined {
+  if (Object.hasOwn(prices.courses, slug)) {
+    const value = prices.courses[slug];
+    return typeof value === "number" && value > 0 ? value : undefined;
+  }
+  return defaultCoursePrices[slug];
+}
+
+export function composeContent(docs: StoredDocs): SiteContent {
+  const prices = docs.prices.data;
+  const updated = Object.values(docs)
+    .map((doc) => doc.updatedAt)
+    .filter((value): value is string => Boolean(value))
+    .sort();
+  return {
+    ...docs.copy.data,
+    courses: docs.courses.data.map((course) => {
+      const { price: _ignored, ...rest } = course;
+      void _ignored;
+      const price = coursePrice(prices, course.slug);
+      return price === undefined ? rest : { ...rest, price };
+    }),
+    extraSessions: docs.dates.data,
+    updatedAt: updated.at(-1) ?? null,
+  };
+}
 
 /**
  * Everything, rates included. For the dashboard and the booking API only:
  * public pages use `readPublicContent`.
  */
 export async function readContent(): Promise<SiteContent> {
-  let content: SiteContent;
-  try {
-    const raw = await readFile(FILE, "utf8");
-    content = mergeContent(JSON.parse(raw));
-  } catch {
-    // No file yet, or unparseable. The defaults are the source of truth.
-    content = defaultContent;
-  }
+  return composeContent(await adminStore().readDocs());
+}
 
-  // A rate saved in the dashboard wins; otherwise the server-side default.
-  return {
-    ...content,
-    courses: content.courses.map((course) => {
-      const price = course.price ?? defaultCoursePrices[course.slug];
-      return price === undefined ? course : { ...course, price };
-    }),
-  };
+/**
+ * For public pages: the stored content, or, if the store can't be read right
+ * now, the built-in copy and courses with no dates, so a database hiccup never
+ * takes the site down. Booking and checkout use `readContent` and fail closed.
+ */
+export async function readContentForDisplay(): Promise<SiteContent> {
+  try {
+    return await readContent();
+  } catch (error) {
+    console.error("[content] store unavailable, showing built-in content:", (error as Error).message);
+    const seed = await seedDocs();
+    const blank = { version: 0, updatedAt: null, updatedBy: null };
+    return composeContent({
+      copy: { data: seed.copy, ...blank },
+      courses: { data: seed.courses, ...blank },
+      dates: { data: [], ...blank },
+      prices: { data: seed.prices, ...blank },
+    });
+  }
+}
+
+/** Shop prices and delivery as staff set them; the lib/shop prices if the store can't be read. */
+export async function readShopPriceList(): Promise<ShopPriceList & { vatNote: string }> {
+  try {
+    const { prices } = await adminStore().readDocs();
+    return { products: prices.data.shop, delivery: prices.data.delivery, vatNote: prices.data.vatNote };
+  } catch (error) {
+    console.error("[content] shop prices unavailable, using built-in prices:", (error as Error).message);
+    return { ...defaultShopPriceList, vatNote: "" };
+  }
 }
 
 export type PublicContent = Omit<SiteContent, "courses"> & {
@@ -59,7 +101,7 @@ export type PublicContent = Omit<SiteContent, "courses"> & {
  * ever saved into the content file.
  */
 export async function readPublicContent(): Promise<PublicContent> {
-  const content = await readContent();
+  const content = await readContentForDisplay();
   const published = content.courses.filter(isPublished);
   const catalogue = await blendedCatalogue(published);
   const linkedIds = new Map(
@@ -82,11 +124,4 @@ export async function readPublicContent(): Promise<PublicContent> {
       fact.label === "Courses" ? { ...fact, value: String(courses.length) } : fact,
     ),
   };
-}
-
-export async function writeContent(input: unknown): Promise<SiteContent> {
-  const next = { ...mergeContent(input), updatedAt: new Date().toISOString() };
-  await mkdir(path.dirname(FILE), { recursive: true });
-  await writeFile(FILE, `${JSON.stringify(next, null, 2)}\n`, "utf8");
-  return next;
 }

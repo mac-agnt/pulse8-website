@@ -5,6 +5,8 @@ import {
   ArrowSquareOut,
   CalendarBlank,
   CheckCircle,
+  ClockCounterClockwise,
+  CurrencyEur,
   FloppyDisk,
   Gauge,
   GraduationCap,
@@ -12,6 +14,8 @@ import {
   Notebook,
   Sidebar as SidebarIcon,
   TextAa,
+  UserCircle,
+  Users,
   Warning,
   X,
 } from "@phosphor-icons/react";
@@ -21,27 +25,60 @@ import { Sidebar, type NavGroupData } from "@/components/admin/Sidebar";
 import { OverviewPanel } from "@/components/admin/OverviewPanel";
 import { CoursesPanel } from "@/components/admin/CoursesPanel";
 import { CopyPanel } from "@/components/admin/CopyPanel";
-import { CalendarPanel } from "@/components/admin/CalendarPanel";
+import { DatesPanel } from "@/components/admin/DatesPanel";
+import { PricesPanel } from "@/components/admin/PricesPanel";
+import { StaffPanel } from "@/components/admin/StaffPanel";
+import { ActivityPanel } from "@/components/admin/ActivityPanel";
+import { AccountPanel, signOut } from "@/components/admin/AccountPanel";
+import type { StaffSummary } from "@/lib/admin/types";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
 const TITLES: Record<string, string> = {
   overview: "Overview",
-  courses: "Courses",
+  prices: "Prices",
+  dates: "Course dates",
+  courses: "Course descriptions",
   copy: "Site copy",
-  calendar: "Calendar",
+  staff: "Staff logins",
+  activity: "Activity",
+  account: "Your account",
 };
+
+/** Panels whose edits are held in this page's draft and saved with the top bar's button. */
+const DRAFT_PANELS = new Set(["courses", "copy"]);
+
+const INTROS: Record<string, string> = {
+  prices: "What Pulse 8 charges online. Only what you change is saved.",
+  dates: "Your dates on the booking page. Every save is live straight away.",
+  staff: "Who can sign in to this admin.",
+  activity: "Who changed what, newest first.",
+  account: "Your login.",
+};
+
+type Versions = { copy: number; courses: number };
 
 /**
  * The dashboard.
  *
- * One draft of the whole content file is held here. Panels mutate it, the top
- * bar saves it, and nothing is written until it is saved, so a half-typed
- * headline never reaches the site.
+ * Prices, Course dates, Staff and Activity load and save on their own. Course
+ * descriptions and site copy share one draft held here, saved with the top
+ * bar's button, so a half-typed headline never reaches the site; the save
+ * names the versions it started from, and a clash with someone else's save
+ * is reported instead of overwriting it.
  */
-export function AdminShell({ initialContent }: { initialContent: SiteContent }) {
+export function AdminShell({
+  user,
+  initialContent,
+  initialVersions,
+}: {
+  user: StaffSummary;
+  initialContent: SiteContent;
+  initialVersions: Versions;
+}) {
   const [content, setContent] = useState(initialContent);
   const [saved, setSaved] = useState(initialContent);
+  const [versions, setVersions] = useState(initialVersions);
   const [panel, setPanel] = useState("overview");
   const [navOpen, setNavOpen] = useState(true);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -68,28 +105,33 @@ export function AdminShell({ initialContent }: { initialContent: SiteContent }) 
   };
 
   const save = useCallback(async () => {
+    if (!dirty) return;
     setState("saving");
     setError(null);
     try {
       const response = await fetch("/api/admin/content", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(content),
+        body: JSON.stringify({ content, versions }),
       });
+      if (response.status === 401) {
+        window.location.assign("/admin/login");
+        return;
+      }
       if (!response.ok) {
-        // The API explains itself (a read-only host, bad input); show that.
         const detail = (await response.json().catch(() => null)) as { error?: string } | null;
         throw new Error(detail?.error ?? `Save failed (${response.status})`);
       }
-      const next = (await response.json()) as SiteContent;
-      setContent(next);
-      setSaved(next);
+      const next = (await response.json()) as { content: SiteContent; versions: Versions };
+      setContent(next.content);
+      setSaved(next.content);
+      setVersions(next.versions);
       setState("saved");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Save failed");
       setState("error");
     }
-  }, [content]);
+  }, [content, versions, dirty]);
 
   // Command palette and save both hang off the keyboard, the way an editor
   // working through a long list of courses would expect.
@@ -128,12 +170,14 @@ export function AdminShell({ initialContent }: { initialContent: SiteContent }) 
     {
       items: [
         { id: "overview", title: "Overview", icon: Gauge },
-        { id: "courses", title: "Courses", icon: GraduationCap, badge: content.courses.length },
+        { id: "prices", title: "Prices", icon: CurrencyEur },
+        { id: "dates", title: "Course dates", icon: CalendarBlank },
       ],
     },
     {
-      heading: "Content",
+      heading: "Website",
       items: [
+        { id: "courses", title: "Course descriptions", icon: GraduationCap, badge: content.courses.length },
         {
           id: "copy",
           title: "Site copy",
@@ -144,19 +188,23 @@ export function AdminShell({ initialContent }: { initialContent: SiteContent }) 
             { id: "copy:copy-steps", title: "Booking steps", icon: Notebook },
           ],
         },
-        {
-          id: "calendar",
-          title: "Calendar",
-          icon: CalendarBlank,
-          badge: content.extraSessions.length || undefined,
-        },
+      ],
+    },
+    {
+      heading: "Admin",
+      items: [
+        ...(user.role === "owner" ? [{ id: "staff", title: "Staff logins", icon: Users }] : []),
+        { id: "activity", title: "Activity", icon: ClockCounterClockwise },
+        { id: "account", title: "Your account", icon: UserCircle },
       ],
     },
   ];
 
   const results = useMemo(() => {
     const term = query.trim().toLowerCase();
-    const pages = Object.entries(TITLES).map(([id, title]) => ({
+    const pages = Object.entries(TITLES)
+      .filter(([id]) => id !== "staff" || user.role === "owner")
+      .map(([id, title]) => ({
       id,
       title,
       detail: "Section",
@@ -164,14 +212,14 @@ export function AdminShell({ initialContent }: { initialContent: SiteContent }) 
     const courses = content.courses.map((course) => ({
       id: "courses",
       title: course.title,
-      detail: `${course.delivery}${course.price !== undefined ? ` · €${course.price}` : ""}`,
+      detail: course.delivery,
     }));
     const all = [...pages, ...courses];
     if (!term) return all.slice(0, 8);
     return all
       .filter((item) => `${item.title} ${item.detail}`.toLowerCase().includes(term))
       .slice(0, 8);
-  }, [content.courses, query]);
+  }, [content.courses, query, user.role]);
 
   const lastSaved = saved.updatedAt
     ? new Date(saved.updatedAt).toLocaleString("en-IE", {
@@ -181,12 +229,6 @@ export function AdminShell({ initialContent }: { initialContent: SiteContent }) 
         minute: "2-digit",
       })
     : null;
-
-  const savedLabel = dirty
-    ? "Unsaved changes"
-    : lastSaved
-      ? `Saved ${lastSaved}`
-      : "Nothing saved yet";
 
   return (
     <div className="flex h-[100dvh] overflow-hidden bg-bg">
@@ -201,7 +243,8 @@ export function AdminShell({ initialContent }: { initialContent: SiteContent }) 
           activeId={panel}
           onSelect={go}
           onSearch={() => setSearchOpen(true)}
-          savedLabel={savedLabel}
+          savedLabel={`${user.name} · ${user.role === "owner" ? "Owner" : "Staff"}`}
+          onSignOut={() => void signOut()}
         />
       </aside>
 
@@ -243,6 +286,7 @@ export function AdminShell({ initialContent }: { initialContent: SiteContent }) 
               View site
             </a>
 
+            {DRAFT_PANELS.has(panel) || dirty ? (
             <button
               type="button"
               onClick={() => void save()}
@@ -257,6 +301,7 @@ export function AdminShell({ initialContent }: { initialContent: SiteContent }) 
               {state === "saved" ? <CheckCircle size={15} weight="fill" /> : <FloppyDisk size={15} />}
               {state === "saving" ? "Saving" : state === "saved" ? "Saved" : "Save changes"}
             </button>
+            ) : null}
           </div>
         </header>
 
@@ -275,15 +320,19 @@ export function AdminShell({ initialContent }: { initialContent: SiteContent }) 
                   {TITLES[panel]}
                 </h1>
                 <p className="mt-1 text-[0.875rem] text-ink-muted">
-                  {dirty
-                    ? "Unsaved changes. Press ⌘S, or use Save changes."
-                    : lastSaved
-                      ? `Last saved ${lastSaved}.`
-                      : "Nothing saved yet. The site is showing the built-in copy."}
+                  {DRAFT_PANELS.has(panel)
+                    ? dirty
+                      ? "Unsaved changes. Press ⌘S (Ctrl+S), or use Save changes."
+                      : lastSaved
+                        ? `Last saved ${lastSaved}.`
+                        : "Nothing changed yet."
+                    : INTROS[panel] ?? (dirty ? "Course descriptions or site copy have unsaved changes." : "")}
                 </p>
               </div>
               <div className="flex gap-1 rounded-[var(--radius-control)] border border-border bg-surface p-1 md:hidden">
-                {Object.entries(TITLES).map(([id, title]) => (
+                {Object.entries(TITLES)
+                  .filter(([id]) => id !== "staff" || user.role === "owner")
+                  .map(([id, title]) => (
                   <button
                     key={id}
                     type="button"
@@ -299,23 +348,16 @@ export function AdminShell({ initialContent }: { initialContent: SiteContent }) 
               </div>
             </div>
 
-            {panel === "overview" ? (
-              <OverviewPanel content={content} onGo={go} />
-            ) : null}
+            {panel === "overview" ? <OverviewPanel name={user.name} onGo={go} /> : null}
+            {panel === "prices" ? <PricesPanel /> : null}
+            {panel === "dates" ? <DatesPanel /> : null}
             {panel === "courses" ? (
-              <CoursesPanel
-                courses={content.courses}
-                onChange={(courses) => patch({ courses })}
-              />
+              <CoursesPanel courses={content.courses} onChange={(courses) => patch({ courses })} />
             ) : null}
             {panel === "copy" ? <CopyPanel content={content} onChange={patch} /> : null}
-            {panel === "calendar" ? (
-              <CalendarPanel
-                courses={content.courses}
-                sessions={content.extraSessions}
-                onChange={(extraSessions) => patch({ extraSessions })}
-              />
-            ) : null}
+            {panel === "staff" && user.role === "owner" ? <StaffPanel currentUserId={user.id} /> : null}
+            {panel === "activity" ? <ActivityPanel /> : null}
+            {panel === "account" ? <AccountPanel user={user} /> : null}
           </div>
         </main>
       </div>

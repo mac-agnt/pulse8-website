@@ -98,23 +98,21 @@ Import the repository in Vercel; the defaults (Next.js preset, `npm run build`)
 are right. `vercel.json` only adds one daily cron, the Blended Learning retry
 (see "Blended learning" below).
 
-- **`ADMIN_PASSWORD`** (optional). The content dashboard at `/admin` is open in
-  development only. In production `proxy.ts` puts it behind basic auth using
-  this variable (any user name). Leave it unset and `/admin` and its API return
-  404.
-- **Dashboard saves do not persist on Vercel.** It writes
-  `content/site-content.json`, and Vercel's file system is read-only, so a save
-  there returns a clear "saving is not available" message. Make content edits
-  locally, commit the file, and redeploy, or move storage to a service such as
-  Vercel Blob before relying on the dashboard in production.
+- **Admin (`/admin`).** Staff sign in with their own login (email and
+  password, or an emailed one-time link), as owner or staff; every change is
+  in the activity log. Content, course dates and prices are stored in Postgres
+  schema `website` (the JSON file under `.data/` in development). See
+  `docs/admin-guide.md` for what staff can do and how logins are given out.
+  **`ADMIN_PASSWORD`** is only the set-up password for the first owner login;
+  with no logins and no `ADMIN_PASSWORD`, `/admin` returns 404.
 - `sitemap.xml` and `robots.txt` are generated for `https://pulse8.ie`, and
   every old WordPress URL redirects (see `next.config.ts`).
 
 ## Booking, payments and email (November 2026)
 
 From Tom O'Donoghue's feedback of 8 November 2026. Public pages show no course
-prices; rates live server-side (`lib/course-prices.server.ts`, or the
-dashboard) and only the booking API reads them.
+prices; rates live server-side (set in `/admin` > Prices; the first import came from
+`lib/course-prices.server.ts`) and only the booking API reads them.
 
 | Piece | Where |
 | --- | --- |
@@ -163,7 +161,8 @@ email failure with independent retry. Nothing leaves the machine.
   over two back ends: the JSON file with its in-process lock (development, and
   the default), or Postgres when `BOOKING_DATABASE_URL` is set. Production on
   Vercel needs the Postgres one (read-only file system, several instances).
-- **Rates.** Every figure in `lib/course-prices.server.ts` is a placeholder.
+- **Rates.** Set by staff in `/admin` > Prices. The imported figures (from
+  `lib/course-prices.server.ts`) are placeholders until Pulse 8 confirms them.
 - **Payment model, staff recipients, Stripe receipt settings** are Pulse 8's
   call; see the handoff list.
 
@@ -251,15 +250,16 @@ out on the server from `lib/shop.ts`.
 - **Payments off** (now): the order goes to staff as a request, with an
   acknowledgement to the customer, as the old order form intended. The form
   only reports success once staff have the email.
-- **Delivery** is a flagged placeholder at €0 in `lib/shop-delivery.ts` until
-  Pulse 8 gives their rates. Staff emails say so on every paid order.
+- **Delivery** is set in `/admin` > Prices (flat charge, optional free-over
+  amount, Ireland only). Until staff confirm it there it is €0 and staff
+  emails flag every paid order. Shop prices are also set there.
 - Shop orders are a separate collection in the same store (`shop_orders` in
   Postgres), so nothing in the shop can change a booking or its places.
 
 | Piece | Where |
 | --- | --- |
 | Pricing a basket | `lib/shop-pricing.ts` |
-| Delivery charge | `lib/shop-delivery.ts` |
+| Delivery rule (rates from /admin) | `lib/shop-delivery.ts` |
 | Order endpoint | `app/api/shop/checkout/route.ts` |
 | Orders, statuses, email records | `lib/booking/shop-store.server.ts` |
 | Order emails | `lib/booking/shop-notify.server.ts` |
@@ -294,8 +294,8 @@ Setting up the database and email for production, with prices:
    `docs/go-live-database-email.md`.
 3. **Shop delivery charge.** Done apart from the rate: the order form takes
    payment through Stripe when payments are on, and sends an order request
-   when they are off (see "Shop checkout and student login"). Set the real
-   delivery rates in `lib/shop-delivery.ts`.
+   when they are off (see "Shop checkout and student login"). Tom sets the
+   real delivery rates in `/admin` > Prices > Delivery and VAT.
 4. **Review the cookie policy.** Sections 1 to 4 and the rights section are the
    old text. The old list of cookies described WordPress, WooCommerce,
    Complianz and Sourcebuster, none of which run here, so it was replaced with
@@ -311,5 +311,5 @@ Setting up the database and email for production, with prices:
 6. **Google rating and figures.** The 5.0 rating, 4,000+ students, 200+ clients
    and 100% satisfaction all come from the current site's own claims. Check they
    still hold before publishing.
-7. **Course prices.** Placeholders, server-side only, see
-   `lib/course-prices.server.ts`. Shop prices are the real published ones.
+7. **Course prices.** Placeholders until Tom sets them in `/admin` > Prices
+   (server-side only). Shop prices are the real published ones.

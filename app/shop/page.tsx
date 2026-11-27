@@ -6,6 +6,7 @@ import { PageIntro } from "@/components/ui/PageIntro";
 import { CategoryNav } from "@/components/shop/CategoryNav";
 import { ProductGrid } from "@/components/shop/ProductGrid";
 import { categories, productsIn } from "@/lib/shop";
+import { shopCatalogue } from "@/lib/shop-catalogue.server";
 
 export const metadata: Metadata = {
   title: "Defibrillators and first aid supplies | Pulse 8 shop",
@@ -16,9 +17,10 @@ export const metadata: Metadata = {
 // The announcement bar in the page shell is date-anchored.
 export const revalidate = 3600;
 
-export default function ShopPage() {
+export default async function ShopPage() {
+  const { priced } = await shopCatalogue();
   const groups = categories
-    .map((category) => ({ category, items: productsIn(category.slug) }))
+    .map((category) => ({ category, items: productsIn(category.slug).map(priced) }))
     .filter((group) => group.items.length > 0);
 
   return (

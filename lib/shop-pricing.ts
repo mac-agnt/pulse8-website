@@ -1,9 +1,10 @@
 import { getProduct } from "@/lib/shop";
-import { deliveryCents } from "@/lib/shop-delivery";
+import { deliveryCents, defaultDeliveryRates, type DeliveryRates } from "@/lib/shop-delivery";
 
 /**
  * Prices a basket from the catalogue. The browser sends only which products,
- * which option and how many; every amount is worked out here from lib/shop,
+ * which option and how many; every amount is worked out here from lib/shop
+ * and the price list staff keep in /admin,
  * so a tampered basket can change what is ordered but never what it costs.
  */
 
@@ -33,6 +34,24 @@ export type PricedBasket = {
   total: number;
 };
 
+/**
+ * What staff have set in /admin: a price per product slug (euro) and the
+ * delivery rates. A product with no entry keeps its price from lib/shop.
+ */
+export type ShopPriceList = {
+  products: Record<string, number>;
+  delivery: DeliveryRates;
+};
+
+export const defaultShopPriceList: ShopPriceList = { products: {}, delivery: defaultDeliveryRates };
+
+/** The euro price a product sells at under this price list. */
+export function productPrice(slug: string, list: ShopPriceList = defaultShopPriceList): number | undefined {
+  const own = list.products[slug];
+  if (typeof own === "number" && Number.isFinite(own) && own > 0) return own;
+  return getProduct(slug)?.price;
+}
+
 /** Euro as published (two decimals at most) to whole cents. */
 export function toCents(euro: number): number {
   return Math.round(euro * 100);
@@ -44,7 +63,7 @@ export function toCents(euro: number): number {
  * quantity outside 1 to 99). Repeated lines for the same product and option
  * are merged.
  */
-export function priceBasket(input: unknown): PricedBasket | null {
+export function priceBasket(input: unknown, list: ShopPriceList = defaultShopPriceList): PricedBasket | null {
   if (!Array.isArray(input) || input.length === 0 || input.length > MAX_SHOP_LINES) return null;
 
   const merged = new Map<string, PricedLine>();
@@ -64,7 +83,7 @@ export function priceBasket(input: unknown): PricedBasket | null {
 
     const choice = product.options ? (option as string) : undefined;
     const key = choice ? `${slug}:${choice}` : slug;
-    const unitAmount = toCents(product.price);
+    const unitAmount = toCents(productPrice(slug, list) ?? product.price);
     const existing = merged.get(key);
     const total = (existing?.quantity ?? 0) + quantity;
     if (total > MAX_LINE_QUANTITY) return null;
@@ -80,7 +99,7 @@ export function priceBasket(input: unknown): PricedBasket | null {
 
   const lines = [...merged.values()];
   const subtotal = lines.reduce((sum, line) => sum + line.lineTotal, 0);
-  const delivery = deliveryCents(subtotal);
+  const delivery = deliveryCents(subtotal, list.delivery);
   return { lines, subtotal, delivery, total: subtotal + delivery };
 }
 

@@ -11,7 +11,7 @@ import { QuantityStepper } from "@/components/shop/QuantityStepper";
 import { useBasket, useBasketReady, type BasketLine } from "@/lib/basket";
 import { duration, ease } from "@/lib/motion";
 import { formatMoney } from "@/lib/shop";
-import { deliveryCents } from "@/lib/shop-delivery";
+import { deliveryCents, type DeliveryRates } from "@/lib/shop-delivery";
 
 /** Placeholder in the shape of the filled basket, until the saved one is read. */
 function BasketSkeleton() {
@@ -135,12 +135,19 @@ function LineRow({
  * `payments` (from the server) says whether the order is paid now in Stripe
  * Checkout or sent to Pulse 8 as a request; the summary and button follow it.
  */
-export function BasketView({ payments }: { payments: boolean }) {
+export function BasketView({
+  payments,
+  priceList,
+}: {
+  payments: boolean;
+  /** prices and delivery as staff set them in /admin */
+  priceList: { products: Record<string, number>; delivery: DeliveryRates; vatNote: string };
+}) {
   const ready = useBasketReady();
-  const { lines, count, subtotal, setQuantity, remove } = useBasket();
+  const { lines, count, subtotal, setQuantity, remove } = useBasket(priceList.products);
   const [sent, setSent] = useState<string | null>(null);
   // Same rule as the server (lib/shop-delivery.ts); the server's figure is what is charged.
-  const delivery = deliveryCents(Math.round(subtotal * 100)) / 100;
+  const delivery = deliveryCents(Math.round(subtotal * 100), priceList.delivery) / 100;
   const [announcement, setAnnouncement] = useState("");
 
   // The live region stays first and mounted across every state, so the
@@ -248,6 +255,7 @@ export function BasketView({ payments }: { payments: boolean }) {
               {payments
                 ? "You pay securely with Stripe on the next step. We deliver within Ireland and email your receipt."
                 : "Delivery and payment are confirmed by email before anything ships."}
+              {priceList.vatNote ? ` ${priceList.vatNote}` : null}
             </p>
 
             <div className="mt-7 border-t border-border-soft pt-7">

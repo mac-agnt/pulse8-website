@@ -9,6 +9,7 @@ import {
 } from "@/lib/booking/shop-store.server";
 import { stripeClient } from "@/lib/booking/stripe.server";
 import { lineLabel, priceBasket } from "@/lib/shop-pricing";
+import { readShopPriceList } from "@/lib/content.server";
 import { clientKey, emailAddress, multiLine, phoneNumber, rateLimited, singleLine } from "@/lib/validate.server";
 
 export const runtime = "nodejs";
@@ -73,7 +74,8 @@ export async function POST(request: Request) {
   const customer = readCustomer(body);
   if (!customer) return fail(400, "Check your name, email, phone, delivery address and Eircode, then try again.");
 
-  const priced = priceBasket(body.lines);
+  const priceList = await readShopPriceList();
+  const priced = priceBasket(body.lines, priceList);
   if (!priced) return fail(400, BASKET);
 
   const config = paymentConfig();
@@ -90,6 +92,7 @@ export async function POST(request: Request) {
       delivery: priced.delivery,
       customer,
       livemode: config?.livemode ?? false,
+      deliveryConfirmed: priceList.delivery.confirmed,
     });
   } catch (error) {
     console.error("[shop] could not record the order:", (error as Error).message);

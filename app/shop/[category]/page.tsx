@@ -6,6 +6,7 @@ import { CategoryNav } from "@/components/shop/CategoryNav";
 import { ProductGrid } from "@/components/shop/ProductGrid";
 import { contact } from "@/lib/data";
 import { categories, getCategory, productsIn } from "@/lib/shop";
+import { shopCatalogue } from "@/lib/shop-catalogue.server";
 
 // The announcement bar in the page shell is date-anchored.
 export const revalidate = 3600;
@@ -31,7 +32,8 @@ export default async function CategoryPage({ params }: Props) {
   const category = getCategory(slug);
   if (!category) notFound();
 
-  const items = productsIn(category.slug);
+  const { priced } = await shopCatalogue();
+  const items = productsIn(category.slug).map(priced);
 
   return (
     <PageShell>

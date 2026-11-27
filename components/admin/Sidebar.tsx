@@ -4,10 +4,10 @@ import { useState } from "react";
 import type { Icon } from "@phosphor-icons/react";
 import {
   CalendarBlank,
-  CaretDown,
   CaretRight,
   Globe,
   MagnifyingGlass,
+  SignOut,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/cn";
 
@@ -138,6 +138,7 @@ export function Sidebar({
   onSelect,
   onSearch,
   savedLabel,
+  onSignOut,
   className,
 }: {
   groups: NavGroupData[];
@@ -145,6 +146,7 @@ export function Sidebar({
   onSelect: (id: string) => void;
   onSearch: () => void;
   savedLabel: string;
+  onSignOut?: () => void;
   className?: string;
 }) {
   return (
@@ -159,7 +161,6 @@ export function Sidebar({
           </span>
           <span className="mt-1.5 text-[11px] leading-none text-ink-faint">{savedLabel}</span>
         </span>
-        <CaretDown size={14} className="ml-auto shrink-0 text-ink-faint" />
       </div>
 
       <button
@@ -213,6 +214,16 @@ export function Sidebar({
           <CalendarBlank size={16} className="shrink-0 text-ink-faint group-hover:text-ink-muted" />
           <span className="text-[0.8125rem]">Booking page</span>
         </a>
+        {onSignOut ? (
+          <button
+            type="button"
+            onClick={onSignOut}
+            className="group flex items-center gap-2.5 rounded-[8px] py-[7px] pr-2.5 pl-2.5 text-left text-ink-muted transition-colors hover:bg-tint/70 hover:text-ink"
+          >
+            <SignOut size={16} className="shrink-0 text-ink-faint group-hover:text-ink-muted" />
+            <span className="text-[0.8125rem]">Sign out</span>
+          </button>
+        ) : null}
       </div>
     </div>
   );
