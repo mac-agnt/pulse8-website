@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { CaretLeft, EnvelopeSimple, Phone, Storefront } from "@phosphor-icons/react/dist/ssr";
 import { PageShell } from "@/components/layout/PageShell";
 import { AddToBasket } from "@/components/shop/AddToBasket";
+import { shopCatalogue } from "@/lib/shop-catalogue.server";
 import { ProductDescription } from "@/components/shop/ProductDescription";
 import { ProductGallery } from "@/components/shop/ProductGallery";
 import { ProductGrid } from "@/components/shop/ProductGrid";
@@ -41,8 +42,9 @@ function summary(product: Product): string {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const product = getProduct(slug);
-  if (!product) return {};
+  const listed = getProduct(slug);
+  if (!listed) return {};
+  const product = (await shopCatalogue()).priced(listed);
   return {
     title: `${product.name} | Pulse 8`,
     description: summary(product),
@@ -70,13 +72,16 @@ function relatedTo(product: Product): { items: Product[]; sameCategory: boolean 
 
 export default async function ProductPage({ params }: Props) {
   const { slug } = await params;
-  const product = getProduct(slug);
-  if (!product) notFound();
+  const listed = getProduct(slug);
+  if (!listed) notFound();
+  const { priced, list } = await shopCatalogue();
+  const product = priced(listed);
 
   const category = getCategory(product.category);
   if (!category) notFound();
 
   const related = relatedTo(product);
+  related.items = related.items.map(priced);
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -124,6 +129,7 @@ export default async function ProductPage({ params }: Props) {
             <p className="figure mt-5 text-3xl font-semibold text-ink">
               {formatMoney(product.price)}
             </p>
+            {list.vatNote ? <p className="mt-2 text-[0.875rem] text-ink-muted">{list.vatNote}</p> : null}
 
             <AddToBasket slug={product.slug} options={product.options} className="mt-8" />
 

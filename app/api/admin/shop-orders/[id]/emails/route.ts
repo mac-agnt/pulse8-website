@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { guard } from "@/lib/admin/auth.server";
 import { sendShopEmail, shopEmailIsDue } from "@/lib/booking/shop-notify.server";
 import { getShopOrder } from "@/lib/booking/shop-store.server";
 import type { EmailKind } from "@/lib/booking/store.server";
@@ -12,6 +13,8 @@ export const dynamic = "force-dynamic";
  * already accepted is not delivered twice.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { staff, response: refused } = await guard(request);
+  if (!staff) return refused;
   const { id } = await params;
   const body = (await request.json().catch(() => ({}))) as { kind?: string };
   const kind = body.kind === "customer" || body.kind === "staff" ? (body.kind as EmailKind) : null;

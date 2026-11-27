@@ -30,9 +30,22 @@ export type ExtraSession = {
   date: string;
   /** HH:MM, 24 hour */
   start: string;
+  /** HH:MM; worked out from the course's duration when not set */
+  end?: string;
   days: number;
+  /** places released for online booking (bookings are counted against these) */
   seatsLeft: number;
   online: boolean;
+  /** where it runs; Pulse 8's training centre when not set */
+  venue?: string;
+  /**
+   * Euro per person for this date only, in place of the course price. SERVER
+   * AND ADMIN ONLY, like Course.price: never part of a public session.
+   */
+  priceOverride?: number | null;
+  /** closed: off the public calendar and no longer bookable; existing bookings stand */
+  closed?: boolean;
+  /** staff only, never shown publicly */
   note?: string;
 };
 

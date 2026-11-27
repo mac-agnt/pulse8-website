@@ -186,7 +186,7 @@ function clear() {
  * Stored lines to display lines. A line drops out when its product is gone, or
  * when its option no longer matches what the product offers.
  */
-function resolve(stored: readonly StoredLine[]): BasketLine[] {
+function resolve(stored: readonly StoredLine[], prices?: Readonly<Record<string, number>>): BasketLine[] {
   const lines: BasketLine[] = [];
 
   for (const line of stored) {
@@ -197,31 +197,38 @@ function resolve(stored: readonly StoredLine[]): BasketLine[] {
       ? line.option !== undefined && product.options.values.includes(line.option)
       : line.option === undefined;
     if (!optionValid) continue;
+    // The price staff set (passed down from the server), else the catalogue's.
+    const price = prices?.[line.slug] ?? product.price;
 
     lines.push({
       key: lineKey(line.slug, line.option),
       slug: line.slug,
       option: line.option,
       quantity: line.quantity,
-      product,
-      lineTotal: toCents(product.price * line.quantity),
+      product: price === product.price ? product : { ...product, price },
+      lineTotal: toCents(price * line.quantity),
     });
   }
 
   return lines;
 }
 
-export function useBasket() {
+/**
+ * The basket. `prices` is the shop's price list from the server (slug to
+ * euro); without it, lines are priced from the catalogue. Either way the
+ * server prices the order again at checkout.
+ */
+export function useBasket(prices?: Readonly<Record<string, number>>) {
   const stored = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   const summary = useMemo(() => {
-    const lines = resolve(stored);
+    const lines = resolve(stored, prices);
     return {
       lines,
       count: lines.reduce((sum, line) => sum + line.quantity, 0),
       subtotal: toCents(lines.reduce((sum, line) => sum + line.lineTotal, 0)),
     };
-  }, [stored]);
+  }, [stored, prices]);
 
   return { ...summary, add, setQuantity, remove, clear };
 }

@@ -3,6 +3,7 @@ import { PageShell } from "@/components/layout/PageShell";
 import { PageIntro } from "@/components/ui/PageIntro";
 import { BasketView } from "@/components/shop/BasketView";
 import { paymentConfig } from "@/lib/booking/config.server";
+import { readShopPriceList } from "@/lib/content.server";
 
 export const metadata: Metadata = {
   title: "Your basket | Pulse 8 shop",
@@ -13,8 +14,9 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 /** The basket lives in the browser, so everything below the title is client side. */
-export default function CartPage() {
+export default async function CartPage() {
   const payments = paymentConfig() !== null;
+  const priceList = await readShopPriceList();
   return (
     <PageShell>
       <PageIntro
@@ -24,7 +26,7 @@ export default function CartPage() {
       />
 
       <div className="shell mt-10 md:mt-12">
-        <BasketView payments={payments} />
+        <BasketView payments={payments} priceList={priceList} />
       </div>
     </PageShell>
   );

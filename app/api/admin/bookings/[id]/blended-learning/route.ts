@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { guard } from "@/lib/admin/auth.server";
 import { deliverBlendedEvent, dueBlendedEvents } from "@/lib/blended/notify.server";
 import { getOrder, type BlendedEventKind } from "@/lib/booking/store.server";
 
@@ -8,10 +9,12 @@ export const dynamic = "force-dynamic";
 /**
  * Retries a booking's undelivered Blended Learning event now:
  * POST {} for whatever is due, or {"kind": "confirmed" | "refunded"}.
- * Behind the same basic auth as the dashboard (proxy.ts). The event id is
+ * Staff only (lib/admin/auth.server.ts). The event id is
  * fixed per booking and kind, so BL never handles it twice.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { staff, response: refused } = await guard(request);
+  if (!staff) return refused;
   const { id } = await params;
   const body = (await request.json().catch(() => ({}))) as { kind?: string };
   const asked =

@@ -4,7 +4,6 @@ import { formatAmount } from "@/lib/booking/notify.server";
 import { getShopOrder, recordShopEmail, type ShopOrder } from "@/lib/booking/shop-store.server";
 import type { EmailKind } from "@/lib/booking/store.server";
 import { detailsHtml, detailsText, escapeHtml, sendMail } from "@/lib/mail/send.server";
-import { DELIVERY_CONFIRMED } from "@/lib/shop-delivery";
 import { lineLabel } from "@/lib/shop-pricing";
 
 /**
@@ -90,8 +89,8 @@ function staffMail(order: ShopOrder) {
     ["Deliver to", address(order)],
     ...(order.customer.notes ? ([["Notes", order.customer.notes]] as Array<[string, string]>) : []),
     ...totals(order),
-    ...(paid && !DELIVERY_CONFIRMED
-      ? ([["Delivery rate", "Placeholder: no delivery was charged (lib/shop-delivery.ts)."]] as Array<[string, string]>)
+    ...(paid && order.deliveryConfirmed === false
+      ? ([["Delivery rate", "Placeholder: no delivery was charged. Set the delivery rates in the website admin (Prices)."]] as Array<[string, string]>)
       : []),
     ...(paid
       ? ([

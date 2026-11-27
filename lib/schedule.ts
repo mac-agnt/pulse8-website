@@ -48,6 +48,9 @@ export type SessionAction = "book" | "enquire";
 /** A session as public pages receive it, with its action decided on the server. */
 export type PublicSession = Session & { action: SessionAction };
 
+/** Where a classroom date runs unless staff name another venue. */
+export const DEFAULT_VENUE = "Pulse 8 Training Centre, Dublin";
+
 const HORIZON_DAYS = 120;
 const MS_DAY = 86_400_000;
 
@@ -280,8 +283,10 @@ export function buildSchedule(anchor: Date, courseList: Course[] = courses): Ses
 export function expandExtraSessions(
   extras: ExtraSession[],
   courseList: Course[] = courses,
+  { includeClosed = false }: { includeClosed?: boolean } = {},
 ): Session[] {
   return extras.flatMap((extra) => {
+    if (extra.closed && !includeClosed) return [];
     const course = courseList.find((item) => item.slug === extra.courseSlug);
     if (!course || course.status === "draft") return [];
 
@@ -299,9 +304,9 @@ export function expandExtraSessions(
         duration: course.duration,
         date: extra.date,
         start: extra.start,
-        end: days > 1 ? "17:00" : toTime(toMinutes(extra.start) + hours * 60),
+        end: extra.end ?? (days > 1 ? "17:00" : toTime(toMinutes(extra.start) + hours * 60)),
         days,
-        venue: extra.online ? "Live online" : "Pulse 8 Training Centre, Dublin",
+        venue: extra.online ? "Live online" : extra.venue?.trim() || DEFAULT_VENUE,
         capacity: Math.max(capacity, extra.seatsLeft),
         seatsLeft: extra.seatsLeft,
         sample: false,

@@ -315,10 +315,31 @@ async function outboxMail() {
 }
 
 async function orders() {
-  const response = await fetch(`${BASE}/api/admin/bookings`, {
-    headers: { authorization: `Basic ${Buffer.from(`x:${ADMIN_PASSWORD}`).toString("base64")}` },
-  });
+  const response = await fetch(`${BASE}/api/admin/bookings`, { headers: adminAuth });
   return response.json();
+}
+
+// ---------------------------------------------------------------- staff sign-in
+// The admin has per-person logins. ADMIN_PASSWORD only creates the first owner.
+const OWNER = { name: "Check Owner", email: "owner.check@example.com", password: "owner-check-password" };
+const STAFF = { name: "Check Staff", email: "staff.check@example.com", password: "staff-check-password" };
+/** Cookie header for the signed-in owner; filled in by signInAsOwner. */
+const adminAuth = {};
+
+function sessionCookie(response) {
+  const cookie = response.headers.getSetCookie().find((value) => value.startsWith("p8_staff="));
+  return cookie ? cookie.split(";")[0] : "";
+}
+
+async function signInAsOwner() {
+  console.log("\nAdmin: first owner");
+  let response = await json("/api/admin/auth/setup", { ...OWNER, setupPassword: "not-the-password" });
+  check("first-owner set-up refuses a wrong set-up password", response.status === 401);
+  response = await json("/api/admin/auth/setup", { ...OWNER, setupPassword: ADMIN_PASSWORD });
+  adminAuth.cookie = sessionCookie(response);
+  check("first owner created with ADMIN_PASSWORD, and signed in", response.status === 200 && adminAuth.cookie.length > 20);
+  response = await json("/api/admin/auth/setup", { ...STAFF, setupPassword: ADMIN_PASSWORD });
+  check("ADMIN_PASSWORD can't create a second owner", response.status === 409);
 }
 
 let eventCounter = 0;
@@ -355,6 +376,7 @@ async function startCheckout(sessionId, extra = {}) {
 // ---------------------------------------------------------------- run
 async function suite() {
   await startApp();
+  await signInAsOwner();
 
   console.log("\nPublic pages and data");
   const pages = ["/", "/courses", "/courses/cardiac-first-response", "/courses/epipen", "/book", "/contact", "/courses/bl-check-cpr", "/courses/first-aid-response-blended"];
@@ -562,7 +584,7 @@ async function suite() {
 
   await startApp();
   before = (await outboxMail()).length;
-  const auth = { authorization: `Basic ${Buffer.from(`x:${ADMIN_PASSWORD}`).toString("base64")}` };
+  const auth = adminAuth;
   response = await json(`/api/admin/bookings/${failOrder.id}/emails`, { kind: "staff" }, auth);
   order = (await orders()).find((o) => o.id === failOrder.id);
   check("staff email retried on its own", response.status === 200 && order.emails.staff.status === "sent" && order.emails.customer.status === "failed");
@@ -575,12 +597,12 @@ async function suite() {
 
   await blendedChecks({ paidOrder, failOrder });
   await shopChecks();
+  await adminChecks();
 }
 
 const page = async (url) => (await fetch(`${BASE}${url}`)).text();
 const orderById = async (id) => (await orders()).find((order) => order.id === id);
 const outboxSince = async (count) => (await outboxMail()).slice(count);
-const adminAuth = { authorization: `Basic ${Buffer.from(`x:${ADMIN_PASSWORD}`).toString("base64")}` };
 
 /** A field of one session in the page's serialised props, e.g. seatsLeft or action. */
 function sessionField(html, id, field) {
@@ -1085,6 +1107,132 @@ async function shopChecks() {
   check("staff retry of a sent email sends nothing", response.status === 200 && (await response.json()).alreadySent === true);
 }
 
+/** A request to an admin API, signed in (or not) as given. */
+const adminCall = (url, method, body, headers = adminAuth) =>
+  fetch(`${BASE}${url}`, {
+    method,
+    headers: {
+      origin: BASE,
+      "x-forwarded-for": `10.8.${Math.floor(++clientCounter / 250)}.${clientCounter % 250}`,
+      ...(body !== undefined ? { "content-type": "application/json" } : {}),
+      ...headers,
+    },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+
+async function adminChecks() {
+  await stopApp();
+  await startApp();
+
+  console.log("\nAdmin: sign-in and roles");
+  let response = await fetch(`${BASE}/admin`, { redirect: "manual" });
+  check("signed-out visit to /admin goes to sign in", isRedirect(response.status) && Boolean(response.headers.get("location")?.includes("/admin/login")));
+  response = await fetch(`${BASE}/admin/login`);
+  check("sign-in page is there", response.status === 200 && (await response.text()).includes("Sign in"));
+  response = await fetch(`${BASE}/admin`, { headers: adminAuth });
+  check("signed-in owner sees the dashboard", response.status === 200 && (await response.text()).includes("Course dates"));
+  response = await fetch(`${BASE}/api/admin/prices`);
+  check("prices API refuses a signed-out request", response.status === 401);
+  response = await adminCall("/api/admin/prices", "PUT", { courses: { "cardiac-first-response": 1 } }, { ...adminAuth, origin: "https://evil.example" });
+  check("a change sent from another site is refused", response.status === 403);
+
+  for (let i = 0; i < 5; i += 1) {
+    response = await json("/api/admin/auth/login", { email: OWNER.email, password: "wrong-password-here" });
+  }
+  check("wrong password refused", response.status === 401);
+  response = await json("/api/admin/auth/login", { email: OWNER.email, password: OWNER.password });
+  check("sixth try in 15 minutes is rate limited, even with the right password", response.status === 429);
+
+  response = await adminCall("/api/admin/staff", "POST", { name: STAFF.name, email: STAFF.email, role: "staff", password: STAFF.password });
+  check("owner adds a staff login", response.status === 200);
+  response = await adminCall("/api/admin/staff", "POST", { name: "Dup", email: STAFF.email.toUpperCase(), role: "staff", password: STAFF.password });
+  check("a second login with the same email is refused", response.status === 409);
+  response = await json("/api/admin/auth/login", { email: STAFF.email, password: STAFF.password });
+  const staffAuth = { cookie: sessionCookie(response) };
+  check("staff member signs in with their password", response.status === 200 && staffAuth.cookie.length > 20);
+  response = await fetch(`${BASE}/api/admin/staff`, { headers: staffAuth });
+  check("staff can't manage logins", response.status === 403);
+  response = await fetch(`${BASE}/api/admin/prices`, { headers: staffAuth });
+  const prices = await response.json();
+  check("staff can open prices", response.status === 200 && prices.classroom.some((c) => c.slug === "cardiac-first-response" && c.price === 95));
+  check(
+    "imported placeholder prices are all there",
+    [["fire-marshal", 95], ["paediatric-first-aid", 110], ["basic-first-aid", 85], ["epipen", null]].every(([slug, price]) =>
+      prices.classroom.some((c) => c.slug === slug && c.price === price),
+    ),
+  );
+  check("a Blended Learning course isn't priced here", !prices.classroom.some((c) => c.slug === "first-aid-response-blended"));
+  check("online courses aren't priced here", !prices.classroom.some((c) => c.slug === "manual-handling-training"));
+  check("imported shop prices match the catalogue", prices.shop.find((p) => p.slug === MINDRAY)?.price === 1295);
+  response = await adminCall("/api/admin/auth/logout", "POST", {}, staffAuth);
+  response = await fetch(`${BASE}/api/admin/prices`, { headers: staffAuth });
+  check("signing out ends the session", response.status === 401);
+
+  const owners = await (await fetch(`${BASE}/api/admin/staff`, { headers: adminAuth })).json();
+  const me = owners.find((user) => user.email === OWNER.email);
+  response = await adminCall(`/api/admin/staff/${me.id}`, "PATCH", { role: "staff" });
+  check("the only owner can't be demoted", response.status === 409);
+
+  console.log("\nAdmin: prices reach checkout");
+  response = await adminCall("/api/admin/prices", "PUT", { courses: { "cardiac-first-response": "120" } });
+  check("owner changes a course price", response.status === 200);
+  let started = await startCheckout(SESSIONS.cfr.id);
+  check("checkout charges the new price (120.00)", started.call?.params.get("line_items[0][price_data][unit_amount]") === "12000");
+  response = await adminCall("/api/admin/prices", "PUT", { courses: { "cardiac-first-response": "" } });
+  started = await startCheckout(SESSIONS.cfr.id);
+  check("a blank price means Enquire: no checkout", started.response.status >= 400);
+  check("…and /book offers Enquire for it", sessionField(await page("/book"), SESSIONS.cfr.id, "action") === "enquire");
+  response = await adminCall("/api/admin/prices", "PUT", { courses: { "cardiac-first-response": "abc" } });
+  check("a price that isn't a number is refused", response.status === 400);
+  await adminCall("/api/admin/prices", "PUT", { courses: { "cardiac-first-response": 95 } });
+
+  response = await adminCall("/api/admin/prices", "PUT", { shop: { [MINDRAY]: 1200 }, delivery: { flatEuro: 7.5, freeOverEuro: 5000 } });
+  check("owner changes a shop price and the delivery rates", response.status === 200);
+  const placed = await placeShopOrder();
+  const p = placed.call?.params;
+  check("shop checkout charges the new product price (1,200.00)", p?.get("line_items[0][price_data][unit_amount]") === "120000");
+  check("shop checkout adds the new delivery charge (7.50)", lineTotal(p) === 2 * 120000 + 3 * 995 + 750);
+  await adminCall("/api/admin/prices", "PUT", { shop: { [MINDRAY]: 1295 }, delivery: { flatEuro: 0, freeOverEuro: null } });
+
+  console.log("\nAdmin: course dates");
+  const day = isoInDays(21);
+  response = await adminCall("/api/admin/dates", "POST", { courseSlug: "fire-marshal", date: day, start: "10:00", end: "13:30", days: 1, seatsLeft: 4, venue: "Cork Training Rooms", priceOverride: "80" });
+  const added = (await response.json()).date;
+  check("owner adds a date", response.status === 200 && typeof added?.id === "string");
+  let book = await page("/book");
+  check("the new date is on /book straight away", sessionField(book, added.id, "action") === "book");
+  check("…with its own venue and end time", book.includes("Cork Training Rooms") && sessionField(book, added.id, "end") === "13");
+  check("…and no price in the page", !/"priceOverride"/.test(book) && !/\\?"price\\?":/.test(book));
+  started = await startCheckout(added.id);
+  check("the date's own price is charged (80.00)", started.call?.params.get("line_items[0][price_data][unit_amount]") === "8000");
+  response = await adminCall(`/api/admin/dates/${added.id}`, "PATCH", { seatsLeft: 6, priceOverride: "" });
+  check("owner edits the date", response.status === 200);
+  started = await startCheckout(added.id);
+  check("a cleared date price falls back to the course price (95.00)", started.call?.params.get("line_items[0][price_data][unit_amount]") === "9500");
+  response = await adminCall(`/api/admin/dates/${added.id}`, "PATCH", { closed: true });
+  book = await page("/book");
+  check("a closed date leaves /book", response.status === 200 && !book.includes(added.id));
+  started = await startCheckout(added.id);
+  check("a closed date can't be booked", started.response.status >= 400);
+  response = await adminCall(`/api/admin/dates/${added.id}`, "DELETE");
+  check("a date with bookings can't be deleted", response.status === 409);
+  response = await adminCall("/api/admin/dates", "POST", { courseSlug: "fire-marshal", date: "2027-02-30", start: "10:00", days: 1, seatsLeft: 4 });
+  check("an impossible date is refused", response.status === 400);
+  response = await adminCall("/api/admin/dates", "POST", { courseSlug: "cpr-for-family-friends-online-x", date: day, start: "10:00", days: 1, seatsLeft: 4 });
+  check("a date for an unknown course is refused", response.status === 400);
+  response = await adminCall("/api/admin/dates", "POST", { courseSlug: "basic-first-aid", date: day, start: "10:00", days: 1, seatsLeft: 4 });
+  const spare = (await response.json()).date;
+  response = await adminCall(`/api/admin/dates/${spare.id}`, "DELETE");
+  check("an unbooked date can be deleted", response.status === 200 && !(await page("/book")).includes(spare.id));
+
+  console.log("\nAdmin: activity log");
+  const log = await (await fetch(`${BASE}/api/admin/activity`, { headers: adminAuth })).json();
+  check("the import is logged", log.some((entry) => entry.action === "import"));
+  check("price change logged with who made it", log.some((entry) => entry.actorName === OWNER.name && entry.summary === "Course price, Cardiac First Response: €95 → €120"));
+  check("date added, closed and deleted are logged", ["Added date: Fire Marshal", "Closed date: Fire Marshal", "Deleted date: Basic First Aid"].every((text) => log.some((entry) => entry.summary.startsWith(text))));
+  check("the log holds no customer details", !JSON.stringify(log).includes(buyer.email) && !JSON.stringify(log).includes(customer.email));
+}
+
 /**
  * Where the Postgres store put its tables, and who can read them. Customers'
  * names and addresses must never be reachable through Supabase's REST API:
@@ -1097,16 +1245,19 @@ async function privacyChecks(url) {
   const client = new pg.Client({ connectionString: url });
   await client.connect();
   try {
-    const TABLES = ["booking_orders", "shop_orders", "booking_events"];
+    const TABLES = [
+      "booking_orders", "shop_orders", "booking_events",
+      "admin_docs", "staff_users", "staff_sessions", "staff_login_tokens", "staff_login_attempts", "admin_audit",
+    ];
     const { rows } = await client.query(
       `SELECT n.nspname AS schema, c.relname AS name, c.relrowsecurity AS rls
          FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
         WHERE c.relkind = 'r' AND c.relname = ANY($1)`,
       [TABLES],
     );
-    check("all three tables are in schema website", TABLES.every((name) => rows.some((r) => r.name === name && r.schema === "website")));
+    check(`all ${TABLES.length} tables are in schema website`, TABLES.every((name) => rows.some((r) => r.name === name && r.schema === "website")));
     check("none of them in public or anywhere else", rows.every((r) => r.schema === "website"));
-    check("row level security on for each", rows.length === 3 && rows.every((r) => r.rls === true));
+    check("row level security on for each", rows.length === TABLES.length && rows.every((r) => r.rls === true));
     const policies = await client.query("SELECT count(*)::int AS n FROM pg_policies WHERE schemaname = 'website'");
     check("no RLS policies (nothing is allowed through)", policies.rows[0].n === 0);
 
@@ -1166,7 +1317,11 @@ if (process.env.BOOKING_CHECK_DATABASE_URL) {
       const client = new pg.Client({ connectionString: url });
       await client.connect();
       // Only the tables: the schema and the website_app role stay, as in production.
-      await client.query("DROP TABLE IF EXISTS website.booking_orders, website.shop_orders, website.booking_events");
+      await client.query(
+        "DROP TABLE IF EXISTS website.booking_orders, website.shop_orders, website.booking_events, " +
+          "website.admin_docs, website.staff_sessions, website.staff_login_tokens, website.staff_login_attempts, " +
+          "website.admin_audit, website.staff_users",
+      );
       await client.end();
     },
     verify: () => privacyChecks(url),

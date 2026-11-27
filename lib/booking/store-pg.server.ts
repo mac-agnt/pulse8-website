@@ -48,7 +48,8 @@ const ORDERS = `${SCHEMA}.booking_orders`;
 const SHOP = `${SCHEMA}.shop_orders`;
 const EVENTS = `${SCHEMA}.booking_events`;
 
-function getPool(): Pool {
+/** Shared with the admin store (lib/admin/store-pg.server.ts): one small pool per instance. */
+export function getPool(): Pool {
   if (!pool) {
     pool = new Pool({
       ...poolConfig(process.env.BOOKING_DATABASE_URL ?? "", process.env.BOOKING_DATABASE_CA),

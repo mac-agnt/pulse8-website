@@ -58,6 +58,8 @@ export type ShopOrder = {
   customer: ShopCustomer;
   status: ShopOrderStatus;
   livemode: boolean;
+  /** false while delivery was still the unconfirmed placeholder rate when ordered */
+  deliveryConfirmed?: boolean;
   checkoutSessionId?: string;
   checkoutUrl?: string;
   paymentIntentId?: string;
@@ -92,7 +94,7 @@ function sameBasket(order: ShopOrder, lines: PricedLine[], total: number): boole
 
 export type ShopOrderRequest = Pick<
   ShopOrder,
-  "attemptKey" | "mode" | "lines" | "subtotal" | "delivery" | "customer" | "livemode"
+  "attemptKey" | "mode" | "lines" | "subtotal" | "delivery" | "customer" | "livemode" | "deliveryConfirmed"
 >;
 
 /**

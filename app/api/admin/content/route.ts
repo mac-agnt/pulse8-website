@@ -1,40 +1,105 @@
 import { NextResponse } from "next/server";
-import { readContent, writeContent } from "@/lib/content.server";
+import { actorOf, guard } from "@/lib/admin/auth.server";
+import { adminStore } from "@/lib/admin/store.server";
+import { composeContent } from "@/lib/content.server";
+import { mergeContent, type Course } from "@/lib/content";
+import { VersionConflict, type CopyDoc } from "@/lib/admin/types";
 
-// Reads and writes the JSON file, so it can never be prerendered or cached.
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** Error codes for a file system the app is not allowed to write to. */
-const READ_ONLY = new Set(["EROFS", "EACCES", "EPERM"]);
-
-export async function GET() {
-  return NextResponse.json(await readContent());
+/** Site copy and course descriptions, with the versions a save must name. */
+export async function GET(request: Request) {
+  const { staff, response } = await guard(request);
+  if (!staff) return response;
+  const docs = await adminStore().readDocs();
+  return NextResponse.json({
+    content: composeContent(docs),
+    versions: { copy: docs.copy.version, courses: docs.courses.version },
+  });
 }
 
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
+function copyChanges(before: CopyDoc, after: CopyDoc): string[] {
+  const parts = [
+    !same(before.hero, after.hero) && "hero",
+    !same(before.facts, after.facts) && "numbers",
+    !same(before.process, after.process) && "booking steps",
+  ].filter(Boolean);
+  return parts.length ? [`Edited site copy: ${parts.join(", ")}`] : [];
+}
+
+function courseChanges(before: Course[], after: Course[]): string[] {
+  const old = new Map(before.map((course) => [course.slug, course]));
+  const now = new Map(after.map((course) => [course.slug, course]));
+  const lines: string[] = [];
+  for (const course of after) {
+    const prior = old.get(course.slug);
+    if (!prior) lines.push(`Added course: ${course.title}`);
+    else if (!same(prior, course)) {
+      const fields = Object.keys({ ...prior, ...course }).filter(
+        (key) => !same(prior[key as keyof Course], course[key as keyof Course]),
+      );
+      lines.push(`Edited course: ${course.title} (${fields.join(", ")})`);
+    }
+  }
+  for (const course of before) if (!now.has(course.slug)) lines.push(`Removed course: ${course.title}`);
+  return lines;
+}
+
+/**
+ * Saves site copy and course descriptions: PUT { content, versions }. A save
+ * naming an old version is refused (409) rather than overwriting someone
+ * else's edit. Prices are not saved here: they have their own panel.
+ */
 export async function PUT(request: Request) {
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "The content sent was not valid JSON." }, { status: 400 });
+  const { staff, response } = await guard(request);
+  if (!staff) return response;
+  const body = (await request.json().catch(() => null)) as {
+    content?: unknown;
+    versions?: { copy?: unknown; courses?: unknown };
+  } | null;
+  if (!body?.content || typeof body.content !== "object") {
+    return NextResponse.json({ error: "The content sent was not valid." }, { status: 400 });
+  }
+  const merged = mergeContent(body.content);
+  const copy: CopyDoc = { hero: merged.hero, facts: merged.facts, process: merged.process };
+  const courses = merged.courses.map(({ price: _price, ...course }) => {
+    void _price;
+    return course as Course;
+  });
+  const slugs = new Set<string>();
+  for (const course of courses) {
+    if (typeof course.slug !== "string" || !/^[a-z0-9-]{1,80}$/.test(course.slug) || slugs.has(course.slug)) {
+      return NextResponse.json({ error: "Each course needs its own web address (lower case letters, numbers and dashes)." }, { status: 400 });
+    }
+    slugs.add(course.slug);
+    if (typeof course.title !== "string" || !course.title.trim()) {
+      return NextResponse.json({ error: "Every course needs a title." }, { status: 400 });
+    }
   }
 
+  const actor = actorOf(staff.user);
+  const version = (value: unknown) => (typeof value === "number" ? value : undefined);
   try {
-    return NextResponse.json(await writeContent(body));
+    await adminStore().updateDoc("copy", (current) => ({ data: copy, audit: copyChanges(current, copy) }), {
+      actor,
+      action: "content.copy",
+      expectedVersion: version(body.versions?.copy),
+    });
+    await adminStore().updateDoc("courses", (current) => ({ data: courses, audit: courseChanges(current, courses) }), {
+      actor,
+      action: "content.courses",
+      expectedVersion: version(body.versions?.courses),
+    });
   } catch (error) {
-    // Serverless hosts such as Vercel mount the app read-only, so the content
-    // file cannot be written there. Say so, rather than surfacing EROFS.
-    const code = error instanceof Error ? (error as NodeJS.ErrnoException).code : undefined;
-    if (code && READ_ONLY.has(code)) {
-      return NextResponse.json(
-        {
-          error:
-            "Saving is not available on this host because its file system is read-only. Edit locally and redeploy, or connect a storage service.",
-        },
-        { status: 503 },
-      );
-    }
+    if (error instanceof VersionConflict) return NextResponse.json({ error: error.message }, { status: 409 });
     throw error;
   }
+  const docs = await adminStore().readDocs();
+  return NextResponse.json({
+    content: composeContent(docs),
+    versions: { copy: docs.copy.version, courses: docs.courses.version },
+  });
 }

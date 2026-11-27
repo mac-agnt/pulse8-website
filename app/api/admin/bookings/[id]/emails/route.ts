@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { guard } from "@/lib/admin/auth.server";
 import { emailIsDue, sendBookingEmail } from "@/lib/booking/notify.server";
 import { getOrder, type EmailKind } from "@/lib/booking/store.server";
 
@@ -11,6 +12,8 @@ export const dynamic = "force-dynamic";
  * the provider already accepted is not delivered twice.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { staff, response: refused } = await guard(request);
+  if (!staff) return refused;
   const { id } = await params;
   const body = (await request.json().catch(() => ({}))) as { kind?: string };
   const kind = body.kind === "customer" || body.kind === "staff" ? (body.kind as EmailKind) : null;
