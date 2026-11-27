@@ -18,7 +18,7 @@ export async function GET(request: Request) {
 /**
  * Adds a login: POST { name, email, role, password?, sendLink? }. With a
  * password, tell the person it yourself; with sendLink, they get an email with
- * a one-time sign-in link and can set their own password once in.
+ * a sign-in link and can set their own password once in.
  */
 export async function POST(request: Request) {
   const { staff, response } = await guard(request, "owner");
