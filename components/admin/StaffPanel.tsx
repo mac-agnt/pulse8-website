@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { EnvelopeSimple, UserPlus } from "@phosphor-icons/react";
+import { EnvelopeSimple, LinkSimple, UserPlus } from "@phosphor-icons/react";
 import type { StaffRole, StaffSummary } from "@/lib/admin/types";
 import { Card, Field, Select, TextInput, Toggle } from "@/components/admin/Field";
 import { AdminButton, Badge, Notice } from "@/components/admin/ui";
@@ -84,6 +84,7 @@ export function StaffPanel({ currentUserId }: { currentUserId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [copied, setCopied] = useState<{ name: string; url: string; onClipboard: boolean } | null>(null);
 
   const fail = useCallback((cause: Error) => setError(cause.message), []);
   const load = useCallback(() => adminApi<StaffSummary[]>("/api/admin/staff").then(setUsers, fail), [fail]);
@@ -106,10 +107,46 @@ export function StaffPanel({ currentUserId }: { currentUserId: string }) {
     }
   };
 
+  /** A 7-day link the owner pastes into their own email or a text. */
+  const copyLink = async (user: StaffSummary) => {
+    setBusy(user.id);
+    setError(null);
+    setNotice(null);
+    setCopied(null);
+    try {
+      const { url } = await adminApi<{ url: string }>(`/api/admin/staff/${user.id}/link`, { method: "POST", json: { copy: true } });
+      let onClipboard = false;
+      try {
+        await navigator.clipboard.writeText(url);
+        onClipboard = true;
+      } catch {
+        // Clipboard blocked: the link is shown below to copy by hand.
+      }
+      setCopied({ name: user.name, url, onClipboard });
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-5">
       {error ? <Notice tone="error">{error}</Notice> : null}
       {notice ? <Notice tone="success">{notice}</Notice> : null}
+      {copied ? (
+        <div className="rounded-[var(--radius-control)] bg-[oklch(95%_0.04_155)] px-3 py-2.5 text-[0.8125rem] text-[oklch(35%_0.09_155)]">
+          <p>
+            {copied.onClipboard ? "Copied. " : ""}Sign-in link for {copied.name}, works for 7 days. Paste it into your email to them:
+          </p>
+          <input
+            readOnly
+            value={copied.url}
+            onFocus={(event) => event.currentTarget.select()}
+            className="mt-2 w-full rounded-[8px] border border-border bg-surface px-2.5 py-1.5 font-mono text-[0.75rem] text-ink"
+          />
+        </div>
+      ) : null}
 
       {adding ? (
         <Card title="Add a login" description="Each person gets their own login, so the activity log shows who changed what.">
@@ -179,6 +216,17 @@ export function StaffPanel({ currentUserId }: { currentUserId: string }) {
                       }
                     >
                       Email sign-in link
+                    </AdminButton>
+                  ) : null}
+                  {user.active ? (
+                    <AdminButton
+                      size="sm"
+                      variant="ghost"
+                      icon={<LinkSimple size={14} />}
+                      disabled={busy === user.id}
+                      onClick={() => void copyLink(user)}
+                    >
+                      Copy sign-in link
                     </AdminButton>
                   ) : null}
                   {user.id !== currentUserId ? (
