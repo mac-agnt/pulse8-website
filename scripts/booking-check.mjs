@@ -1152,6 +1152,20 @@ async function adminChecks() {
   check("staff member signs in with their password", response.status === 200 && staffAuth.cookie.length > 20);
   response = await fetch(`${BASE}/api/admin/staff`, { headers: staffAuth });
   check("staff can't manage logins", response.status === 403);
+
+  // Owners can copy a 7-day sign-in link to send someone themselves.
+  const everyone = await (await fetch(`${BASE}/api/admin/staff`, { headers: adminAuth })).json();
+  const staffRow = everyone.find((user) => user.email === STAFF.email);
+  response = await adminCall(`/api/admin/staff/${staffRow.id}/link`, "POST", { copy: true }, staffAuth);
+  check("staff can't make sign-in links", response.status === 403);
+  response = await adminCall(`/api/admin/staff/${staffRow.id}/link`, "POST", { copy: true });
+  const copied = await response.json();
+  check("owner copies a sign-in link", response.status === 200 && typeof copied.url === "string" && copied.url.includes("/admin/login/link#"));
+  const copiedToken = copied.url?.split("#")[1];
+  response = await json("/api/admin/auth/link/verify", { token: copiedToken });
+  check("the copied link signs that person in", response.status === 200 && sessionCookie(response).length > 20);
+  response = await json("/api/admin/auth/link/verify", { token: copiedToken });
+  check("the copied link works once", response.status !== 200);
   response = await fetch(`${BASE}/api/admin/prices`, { headers: staffAuth });
   const prices = await response.json();
   check("staff can open prices", response.status === 200 && prices.classroom.some((c) => c.slug === "cardiac-first-response" && c.price === 95));

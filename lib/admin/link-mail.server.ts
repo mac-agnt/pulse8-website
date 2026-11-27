@@ -5,6 +5,17 @@ import { LINK_MINUTES, WELCOME_LINK_MINUTES, issueLoginToken } from "@/lib/admin
 import type { StaffUser } from "@/lib/admin/types";
 
 /**
+ * A one-time sign-in link an owner can copy and send themselves (in their own
+ * email or a text), lasting as long as an emailed one from an owner.
+ */
+export async function signInLinkFor(user: StaffUser, requestOrigin: string | null): Promise<string | null> {
+  const origin = returnOrigin(requestOrigin);
+  if (!origin) return null;
+  const token = await issueLoginToken(user, WELCOME_LINK_MINUTES);
+  return `${origin}/admin/login/link#${token}`;
+}
+
+/**
  * Emails a one-time sign-in link. The link opens a page with a button, and
  * only pressing it spends the token: mail scanners that open links on their
  * own can't use it up. The origin comes from SITE_URL (and its allowlist),
