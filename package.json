@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:unit": "node --test scripts/unit/blended.test.mjs scripts/unit/pg-config.test.mjs",
+    "test:unit": "node --test scripts/unit/blended.test.mjs scripts/unit/pg-config.test.mjs scripts/unit/finance.test.mjs",
     "check:booking": "npm run test:unit && node scripts/booking-check.mjs",
     "typecheck": "tsc --noEmit"
   },

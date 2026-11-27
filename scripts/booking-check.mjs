@@ -1164,6 +1164,49 @@ async function adminChecks() {
   check("a Blended Learning course isn't priced here", !prices.classroom.some((c) => c.slug === "first-aid-response-blended"));
   check("online courses aren't priced here", !prices.classroom.some((c) => c.slug === "manual-handling-training"));
   check("imported shop prices match the catalogue", prices.shop.find((p) => p.slug === MINDRAY)?.price === 1295);
+  // Finance: owners only. Staff see bookings and orders, never amounts.
+  console.log("\nAdmin: Finance (owners only)");
+  response = await fetch(`${BASE}/api/admin/finance?range=all`, { headers: staffAuth });
+  check("staff can't open Finance", response.status === 403);
+  response = await fetch(`${BASE}/api/admin/finance?range=all`);
+  check("Finance refuses a signed-out request", response.status === 401);
+  response = await fetch(`${BASE}/api/admin/finance?range=all`, { headers: adminAuth });
+  const finance = await response.json();
+  const allBookings = await (await fetch(`${BASE}/api/admin/bookings`, { headers: adminAuth })).json();
+  const allShop = await (await fetch(`${BASE}/api/admin/shop-orders`, { headers: adminAuth })).json();
+  const takenStatuses = new Set(["paid", "refunded", "exception"]);
+  const expectedNet =
+    allBookings.filter((o) => takenStatuses.has(o.status) && !o.livemode).reduce((t, o) => t + o.amountTotal - Math.min(o.amountTotal, o.amountRefunded ?? (o.status === "refunded" ? o.amountTotal : 0)), 0) +
+    allShop.filter((o) => o.mode === "payment" && takenStatuses.has(o.status) && !o.livemode).reduce((t, o) => t + o.amountTotal - Math.min(o.amountTotal, o.amountRefunded ?? (o.status === "refunded" ? o.amountTotal : 0)), 0);
+  check("owner opens Finance", response.status === 200 && Array.isArray(finance.periods));
+  check("Stripe test mode: Finance shows test payments, marked as test", finance.mode === "test" && finance.hasTest === true && finance.hasLive === false);
+  check("Finance has payments from the runs above", finance.totals.payments > 0 && finance.totals.net > 0, JSON.stringify(finance.totals));
+  check("Finance total matches the bookings and shop orders, after refunds", finance.totals.net === expectedNet, `${finance.totals.net} vs ${expectedNet}`);
+  check(
+    "Finance sources add up to the total",
+    finance.bySource.reduce((t, s) => t + s.net, 0) === finance.totals.net && finance.periods.reduce((t, p) => t + p.total, 0) === finance.totals.net,
+  );
+  check("Finance counts shop and Blended Learning separately", finance.bySource.find((s) => s.source === "shop")?.net > 0 && finance.bySource.find((s) => s.source === "blended")?.payments > 0);
+  response = await fetch(`${BASE}/api/admin/finance?range=all&mode=live`, { headers: adminAuth });
+  check("no live payments mixed in while Stripe is in test mode", (await response.json()).totals.net === 0);
+  response = await fetch(`${BASE}/api/admin/finance?range=30d`, { headers: adminAuth });
+  check("30-day range is per day", (await response.json()).periods.length === 30);
+  const staffBookings = await (await fetch(`${BASE}/api/admin/bookings`, { headers: staffAuth })).json();
+  check(
+    "staff see bookings without any amounts",
+    staffBookings.length === allBookings.length && staffBookings.every((o) => !("amountTotal" in o) && !("unitAmount" in o) && !("amountRefunded" in o) && o.courseTitle),
+  );
+  const staffShop = await (await fetch(`${BASE}/api/admin/shop-orders`, { headers: staffAuth })).json();
+  check(
+    "staff see shop orders without any amounts",
+    staffShop.length === allShop.length &&
+      staffShop.every((o) => !("amountTotal" in o) && !("subtotal" in o) && !("delivery" in o) && o.lines.every((l) => !("unitAmount" in l) && !("lineTotal" in l) && l.name)),
+  );
+  check("owners still see amounts on bookings", allBookings.some((o) => typeof o.amountTotal === "number"));
+  response = await fetch(`${BASE}/admin`, { headers: staffAuth });
+  const staffPage = await response.text();
+  check("staff dashboard has no Finance in the menu", response.status === 200 && !staffPage.includes('"finance"') && !staffPage.includes(">Finance<"));
+
   response = await adminCall("/api/admin/auth/logout", "POST", {}, staffAuth);
   response = await fetch(`${BASE}/api/admin/prices`, { headers: staffAuth });
   check("signing out ends the session", response.status === 401);

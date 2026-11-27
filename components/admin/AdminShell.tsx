@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowSquareOut,
   CalendarBlank,
+  ChartLineUp,
   CheckCircle,
   ClockCounterClockwise,
   CurrencyEur,
@@ -29,6 +30,7 @@ import { DatesPanel } from "@/components/admin/DatesPanel";
 import { PricesPanel } from "@/components/admin/PricesPanel";
 import { StaffPanel } from "@/components/admin/StaffPanel";
 import { ActivityPanel } from "@/components/admin/ActivityPanel";
+import { FinancePanel } from "@/components/admin/FinancePanel";
 import { AccountPanel, signOut } from "@/components/admin/AccountPanel";
 import type { StaffSummary } from "@/lib/admin/types";
 
@@ -36,6 +38,7 @@ type SaveState = "idle" | "saving" | "saved" | "error";
 
 const TITLES: Record<string, string> = {
   overview: "Overview",
+  finance: "Finance",
   prices: "Prices",
   dates: "Course dates",
   courses: "Course descriptions",
@@ -45,10 +48,14 @@ const TITLES: Record<string, string> = {
   account: "Your account",
 };
 
+/** Sections staff logins never see (their API routes refuse staff too). */
+const OWNER_ONLY = new Set(["staff", "finance"]);
+
 /** Panels whose edits are held in this page's draft and saved with the top bar's button. */
 const DRAFT_PANELS = new Set(["courses", "copy"]);
 
 const INTROS: Record<string, string> = {
+  finance: "Every payment the website takes, from every source. Only owners can see this.",
   prices: "What Pulse 8 charges online. Only what you change is saved.",
   dates: "Your dates on the booking page. Every save is live straight away.",
   staff: "Who can sign in to this admin.",
@@ -170,6 +177,7 @@ export function AdminShell({
     {
       items: [
         { id: "overview", title: "Overview", icon: Gauge },
+        ...(user.role === "owner" ? [{ id: "finance", title: "Finance", icon: ChartLineUp }] : []),
         { id: "prices", title: "Prices", icon: CurrencyEur },
         { id: "dates", title: "Course dates", icon: CalendarBlank },
       ],
@@ -203,7 +211,7 @@ export function AdminShell({
   const results = useMemo(() => {
     const term = query.trim().toLowerCase();
     const pages = Object.entries(TITLES)
-      .filter(([id]) => id !== "staff" || user.role === "owner")
+      .filter(([id]) => !OWNER_ONLY.has(id) || user.role === "owner")
       .map(([id, title]) => ({
       id,
       title,
@@ -331,7 +339,7 @@ export function AdminShell({
               </div>
               <div className="flex gap-1 rounded-[var(--radius-control)] border border-border bg-surface p-1 md:hidden">
                 {Object.entries(TITLES)
-                  .filter(([id]) => id !== "staff" || user.role === "owner")
+                  .filter(([id]) => !OWNER_ONLY.has(id) || user.role === "owner")
                   .map(([id, title]) => (
                   <button
                     key={id}
@@ -356,6 +364,7 @@ export function AdminShell({
             ) : null}
             {panel === "copy" ? <CopyPanel content={content} onChange={patch} /> : null}
             {panel === "staff" && user.role === "owner" ? <StaffPanel currentUserId={user.id} /> : null}
+            {panel === "finance" && user.role === "owner" ? <FinancePanel /> : null}
             {panel === "activity" ? <ActivityPanel /> : null}
             {panel === "account" ? <AccountPanel user={user} /> : null}
           </div>

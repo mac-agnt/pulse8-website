@@ -30,11 +30,18 @@ Go to **https://www.pulse8.ie/admin** and sign in.
 - **Activity**: who changed what, and when (e.g. "Tom: Course price, Cardiac
   First Response: €95 → €100").
 - **Your account**: set or change his password, sign out.
+- Owners also get **Finance**: every payment the website takes, from course
+  bookings, Blended Learning bookings and the shop, as charts. Revenue over
+  time (per day, week or month), where it comes from, top courses and shop
+  products, and the latest payments, after refunds. Test payments (while
+  Stripe is in test mode) are shown separately and clearly marked.
 - Owners also get **Staff logins**: add people, make them owner or staff,
   switch a login off, or email someone a sign-in link.
 
-Roles: an **owner** can do everything, including logins. **Staff** can do
-everything except manage logins. There is always at least one owner.
+Roles: an **owner** can do everything, including Finance and logins.
+**Staff** can do everything else, but can't see Finance or any payment amount
+(the server refuses them, not just the menu), and can't manage logins. There
+is always at least one owner.
 
 Public pages still never show course prices; they only reach Stripe at
 checkout.
