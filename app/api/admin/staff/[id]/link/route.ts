@@ -13,7 +13,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const { id } = await params;
   const user = await adminStore().userById(id);
   if (!user || !user.active) return NextResponse.json({ error: "No such active login." }, { status: 404 });
-  const sent = await sendSignInLink(user, request.headers.get("origin"));
+  const sent = await sendSignInLink(user, request.headers.get("origin"), { fromOwner: true });
   if (!sent.ok) return NextResponse.json({ error: sent.error }, { status: 502 });
   await adminStore().audit(actorOf(staff.user), "staff.link", [`Emailed a sign-in link to ${user.name}`]);
   return NextResponse.json({ ok: true });

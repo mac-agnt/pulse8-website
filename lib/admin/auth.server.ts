@@ -28,6 +28,8 @@ const SESSION_DAYS = 30;
 const IDLE_DAYS = 7;
 const TOUCH_AFTER_MS = 60 * 60 * 1000;
 export const LINK_MINUTES = 15;
+/** A link an owner sends someone (new login, or a fresh link): they may not open it until the next day. */
+export const WELCOME_LINK_MINUTES = 7 * 24 * 60;
 export const MIN_PASSWORD = 10;
 
 const scryptAsync = promisify(scrypt) as (password: string, salt: Buffer, keylen: number, options: object) => Promise<Buffer>;
@@ -240,9 +242,9 @@ export async function checkPassword(email: string, password: string): Promise<St
 }
 
 /** A one-time sign-in link token for this user; returns the raw token for the email. */
-export async function issueLoginToken(user: StaffUser): Promise<string> {
+export async function issueLoginToken(user: StaffUser, minutes: number = LINK_MINUTES): Promise<string> {
   const token = randomBytes(32).toString("base64url");
-  const expires = new Date(Date.now() + LINK_MINUTES * 60_000).toISOString();
+  const expires = new Date(Date.now() + minutes * 60_000).toISOString();
   await adminStore().putLoginToken(sha256(token), user.id, expires);
   return token;
 }

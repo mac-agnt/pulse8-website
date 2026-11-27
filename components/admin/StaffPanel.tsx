@@ -36,7 +36,7 @@ function AddPerson({ onDone }: { onDone: (message: string) => void }) {
           onDone(
             sendLink
               ? result.linkSent
-                ? `${name} has a login. We emailed them a sign-in link (it works for 15 minutes; send another from this list if it runs out).`
+                ? `${name} has a login. We emailed them a sign-in link.`
                 : `${name} has a login, but the email didn't send. Use “Email sign-in link” below once email is working, or set them a password.`
               : `${name} has a login. Tell them their password yourself (not by email), and ask them to change it under “Your account”.`,
           );

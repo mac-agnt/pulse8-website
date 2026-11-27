@@ -67,7 +67,7 @@ placeholder prices are copied in, so nothing is lost.
 3. **Give Tom his login**: Staff logins > **Add a login** > Tom's name and
    email > role **Owner** (or Staff) and either:
    - leave **"Email them a sign-in link"** on: Tom gets an email with a
-     one-time link (works for 15 minutes). He clicks it, presses Sign in, then
+     sign-in link (works for 7 days). He clicks it, presses Sign in, then
      sets a password under Your account. Needs website email working
      (`RESEND_API_KEY`, `MAIL_FROM` and `SITE_URL` set, as in the go-live
      steps); or

@@ -129,7 +129,7 @@ export function LoginForm({ setupOpen, needsSetupPassword }: { setupOpen: boolea
 
       {linkSent ? (
         <Notice tone="success">
-          If {email} has a login, a sign-in link is on its way. It works once, for 15 minutes. Check spam if it isn&apos;t there in a minute.
+          If {email} has a login, a sign-in link is on its way. Check spam if it isn&apos;t there in a minute.
         </Notice>
       ) : (
         <form className="grid gap-4" onSubmit={submit}>
